@@ -1,0 +1,192 @@
+name: PlatePal CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: platepal_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: platepal_test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      mongodb:
+        image: mongo:latest
+        env:
+          MONGO_INITDB_ROOT_USERNAME: test_user
+          MONGO_INITDB_ROOT_PASSWORD: test_password
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies - User Service
+      run: |
+        cd backend/user-service
+        npm ci
+
+    - name: Run tests - User Service
+      run: |
+        cd backend/user-service
+        npm run test
+      env:
+        DATABASE_URL: postgresql://platepal_user:test_password@localhost:5432/platepal_test_db
+
+    - name: Install dependencies - Restaurant Service
+      run: |
+        cd backend/restaurant-service
+        npm ci
+
+    - name: Run tests - Restaurant Service
+      run: |
+        cd backend/restaurant-service
+        npm run test
+      env:
+        DATABASE_URL: postgresql://platepal_user:test_password@localhost:5432/platepal_test_db
+        MONGODB_URL: mongodb://test_user:test_password@localhost:27017/platepal_test_menus?authSource=admin
+
+    - name: Install dependencies - Order Service
+      run: |
+        cd backend/order-service
+        npm ci
+
+    - name: Run tests - Order Service
+      run: |
+        cd backend/order-service
+        npm run test
+      env:
+        DATABASE_URL: postgresql://platepal_user:test_password@localhost:5432/platepal_test_db
+
+    - name: Install dependencies - Restaurant Dashboard
+      run: |
+        cd restaurant-dashboard
+        npm ci
+
+    - name: Build Restaurant Dashboard
+      run: |
+        cd restaurant-dashboard
+        npm run build
+
+    - name: Install dependencies - Admin Dashboard
+      run: |
+        cd admin-dashboard
+        npm ci
+
+    - name: Build Admin Dashboard
+      run: |
+        cd admin-dashboard
+        npm run build
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push User Service
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend/user-service
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/user-service:${{ github.sha }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Build and push Restaurant Service
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend/restaurant-service
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/restaurant-service:${{ github.sha }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Build and push Order Service
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend/order-service
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/order-service:${{ github.sha }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Build and push Restaurant Dashboard
+      uses: docker/build-push-action@v5
+      with:
+        context: ./restaurant-dashboard
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/restaurant-dashboard:${{ github.sha }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Build and push Admin Dashboard
+      uses: docker/build-push-action@v5
+      with:
+        context: ./admin-dashboard
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/admin-dashboard:${{ github.sha }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Deploy to production
+      run: |
+        echo "Deployment would happen here"
+        echo "This could be a deployment to AWS, Google Cloud, Azure, or any other cloud provider"
+        echo "For now, this is a placeholder for the actual deployment logic"
