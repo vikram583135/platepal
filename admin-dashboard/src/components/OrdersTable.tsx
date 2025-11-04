@@ -1,40 +1,33 @@
 'use client';
 
 import { Order } from '@/store';
+import { formatINR } from '@/lib/currency';
+import DataTable, { Column } from './DataTable';
 import { useState } from 'react';
+import Modal from './Modal';
 
 interface OrdersTableProps {
   orders: Order[];
 }
 
 export default function OrdersTable({ orders }: OrdersTableProps) {
-  const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled'>('all');
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const filteredOrders = filter === 'all' 
-    ? orders 
-    : orders.filter(order => order.status === filter);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'confirmed':
-        return 'bg-blue-100 text-blue-800';
-      case 'preparing':
-        return 'bg-purple-100 text-purple-800';
-      case 'ready':
-        return 'bg-orange-100 text-orange-800';
-      case 'delivered':
-        return 'bg-green-100 text-green-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const getStatusBadge = (status: string) => {
+    const statusClasses: Record<string, string> = {
+      pending: 'badge-warning',
+      confirmed: 'badge-info',
+      preparing: 'badge-info',
+      ready: 'badge-warning',
+      delivered: 'badge-success',
+      cancelled: 'badge-error',
+    };
+    return statusClasses[status] || 'bg-border text-text-secondary';
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('en-IN', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -42,85 +35,125 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
     });
   };
 
+  const handleRowClick = (order: Order) => {
+    setSelectedOrder(order);
+    setIsModalOpen(true);
+  };
+
+  const columns: Column<Order>[] = [
+    {
+      key: 'id',
+      label: 'Order ID',
+      render: (value) => `#${String(value).slice(-8)}`,
+      format: (value) => String(value).slice(-8),
+    },
+    {
+      key: 'customerName',
+      label: 'Customer',
+      sortable: true,
+    },
+    {
+      key: 'restaurantName',
+      label: 'Restaurant',
+      sortable: true,
+    },
+    {
+      key: 'total',
+      label: 'Total',
+      sortable: true,
+      render: (value) => <span className="font-semibold">{formatINR(Number(value))}</span>,
+      format: (value) => formatINR(Number(value), false),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      render: (value) => (
+        <span className={`inline-flex ${getStatusBadge(String(value))}`}>
+          {String(value).charAt(0).toUpperCase() + String(value).slice(1)}
+        </span>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Date',
+      sortable: true,
+      render: (value) => <span className="text-text-secondary">{formatDate(String(value))}</span>,
+      format: (value) => formatDate(String(value)),
+    },
+  ];
+
   return (
-    <div className="bg-white shadow rounded-lg">
-      <div className="px-4 py-5 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as 'all' | 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled')}
-            className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-          >
-            <option value="all">All Orders</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="preparing">Preparing</option>
-            <option value="ready">Ready</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Order ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Restaurant
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    #{order.id.slice(-8)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {order.customerName}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {order.restaurantName}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${order.total.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.status)}`}>
-                      {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+    <>
+      <DataTable
+        data={orders}
+        columns={columns}
+        title="Orders"
+        searchable={true}
+        searchPlaceholder="Search orders..."
+        searchKeys={['id', 'customerName', 'restaurantName']}
+        exportable={true}
+        exportFilename="orders"
+        pagination={true}
+        itemsPerPage={10}
+        onRowClick={handleRowClick}
+        emptyMessage="No orders found"
+      />
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={`Order Details - #${selectedOrder?.id.slice(-8)}`}
+        size="lg"
+      >
+        {selectedOrder && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm font-medium text-text-secondary">Customer</p>
+                <p className="text-text-primary">{selectedOrder.customerName}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-text-secondary">Restaurant</p>
+                <p className="text-text-primary">{selectedOrder.restaurantName}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-text-secondary">Status</p>
+                <span className={`inline-flex mt-1 ${getStatusBadge(selectedOrder.status)}`}>
+                  {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-text-secondary">Total</p>
+                <p className="text-text-primary font-semibold">{formatINR(selectedOrder.total)}</p>
+              </div>
+              {selectedOrder.deliveryPartnerName && (
+                <div>
+                  <p className="text-sm font-medium text-text-secondary">Delivery Partner</p>
+                  <p className="text-text-primary">{selectedOrder.deliveryPartnerName}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-medium text-text-secondary">Date</p>
+                <p className="text-text-primary">{formatDate(selectedOrder.createdAt)}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-text-secondary mb-2">Items</p>
+              <div className="space-y-2">
+                {selectedOrder.items.map((item) => (
+                  <div key={item.id} className="flex justify-between items-center p-2 bg-primary-light bg-opacity-10 rounded">
+                    <span className="text-text-primary">{item.name}</span>
+                    <span className="text-text-primary">
+                      {item.quantity} × {formatINR(item.price)} = {formatINR(item.price * item.quantity)}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(order.createdAt)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        {filteredOrders.length === 0 && (
-          <div className="text-center py-4 text-gray-500">
-            No orders found for the selected filter.
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
-      </div>
-    </div>
+      </Modal>
+    </>
   );
 }

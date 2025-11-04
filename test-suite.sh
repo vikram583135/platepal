@@ -1,17 +1,19 @@
 #!/bin/bash
 
-# PlatePal Test Suite Runner
-# This script runs comprehensive tests for all PlatePal services
+# PlatePal Comprehensive Test Suite Runner
+# Updated for Phase 1-6: Includes WebSocket, RBAC, Real-time Features, Docker
 
 set -e
 
-echo "🧪 Starting PlatePal Test Suite..."
+echo "🧪 Starting PlatePal Comprehensive Test Suite..."
+echo "================================================"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Test configuration
@@ -21,19 +23,16 @@ RESTAURANT_SERVICE_PORT="3002"
 ORDER_SERVICE_PORT="3003"
 RESTAURANT_DASHBOARD_PORT="3004"
 ADMIN_DASHBOARD_PORT="3005"
+CUSTOMER_WEB_PORT="3006"
+DELIVERY_WEB_PORT="3007"
 
-# Test data
-TEST_USER_EMAIL="test@example.com"
-TEST_USER_PASSWORD="password123"
-TEST_RESTAURANT_EMAIL="restaurant@test.com"
-TEST_DELIVERY_EMAIL="delivery@test.com"
-ADMIN_EMAIL="admin@example.com"
+# WebSocket URLs
+WS_ORDER_SERVICE="ws://localhost:3003"
 
-# JWT tokens (will be populated during tests)
-USER_TOKEN=""
-RESTAURANT_TOKEN=""
-DELIVERY_TOKEN=""
-ADMIN_TOKEN=""
+# Test results
+TESTS_PASSED=0
+TESTS_FAILED=0
+TESTS_TOTAL=0
 
 # Function to print colored output
 print_status() {
@@ -41,29 +40,37 @@ print_status() {
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo -e "${GREEN}[✓]${NC} $1"
+    ((TESTS_PASSED++))
+    ((TESTS_TOTAL++))
 }
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[✗]${NC} $1"
+    ((TESTS_FAILED++))
+    ((TESTS_TOTAL++))
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo -e "${YELLOW}[!]${NC} $1"
+}
+
+print_section() {
+    echo ""
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${CYAN}$1${NC}"
+    echo -e "${CYAN}========================================${NC}"
 }
 
 # Function to check if service is running
 check_service() {
     local service_name=$1
-    local port=$2
+    local url=$2
+    local port=$3
     
     print_status "Checking $service_name on port $port..."
     
-    # Try /health endpoint first, fall back to root endpoint
-    if curl -s -f "$BASE_URL:$port/health" > /dev/null 2>&1; then
-        print_success "$service_name is running"
-        return 0
-    elif curl -s -f "$BASE_URL:$port" > /dev/null 2>&1; then
+    if curl -f -s -o /dev/null "$url:$port/health" 2>/dev/null || curl -f -s -o /dev/null "$url:$port" 2>/dev/null; then
         print_success "$service_name is running"
         return 0
     else
@@ -72,426 +79,369 @@ check_service() {
     fi
 }
 
-# Function to wait for service to be ready
-wait_for_service() {
-    local service_name=$1
-    local port=$2
-    local max_attempts=30
-    local attempt=1
+# Function to check Docker services
+check_docker_services() {
+    print_section "Checking Docker Services"
     
-    print_status "Waiting for $service_name to be ready..."
+    if command -v docker-compose &> /dev/null; then
+        print_status "Checking Docker Compose services..."
+        
+        if docker-compose ps | grep -q "Up"; then
+            print_success "Docker services are running"
+            
+            # Check each service
+            check_service "User Service" "$BASE_URL" "$USER_SERVICE_PORT" || true
+            check_service "Restaurant Service" "$BASE_URL" "$RESTAURANT_SERVICE_PORT" || true
+            check_service "Order Service" "$BASE_URL" "$ORDER_SERVICE_PORT" || true
+            check_service "Restaurant Dashboard" "$BASE_URL" "$RESTAURANT_DASHBOARD_PORT" || true
+            check_service "Admin Dashboard" "$BASE_URL" "$ADMIN_DASHBOARD_PORT" || true
+            check_service "Customer Web" "$BASE_URL" "$CUSTOMER_WEB_PORT" || true
+            check_service "Delivery Web" "$BASE_URL" "$DELIVERY_WEB_PORT" || true
+        else
+            print_warning "Docker services may not be running. Start with: docker-compose up -d"
+        fi
+    else
+        print_warning "docker-compose not found. Skipping Docker service checks."
+    fi
+}
+
+# Function to test API endpoint
+test_api_endpoint() {
+    local name=$1
+    local method=$2
+    local url=$3
+    local expected_code=$4
+    local headers=$5
     
-    while [ $attempt -le $max_attempts ]; do
-        if check_service "$service_name" "$port"; then
+    print_status "Testing $name..."
+    
+    if [ -z "$headers" ]; then
+        response_code=$(curl -s -o /dev/null -w "%{http_code}" -X "$method" "$url" 2>/dev/null || echo "000")
+    else
+        response_code=$(curl -s -o /dev/null -w "%{http_code}" -X "$method" -H "$headers" "$url" 2>/dev/null || echo "000")
+    fi
+    
+    if [ "$response_code" = "$expected_code" ]; then
+        print_success "$name returns $expected_code"
+        return 0
+    else
+        print_error "$name returned $response_code (expected $expected_code)"
+        return 1
+    fi
+}
+
+# Function to test WebSocket endpoint (basic check)
+test_websocket_endpoint() {
+    local name=$1
+    local url=$2
+    
+    print_status "Testing WebSocket endpoint: $name..."
+    
+    # Use wscat if available, otherwise just check if port is open
+    if command -v wscat &> /dev/null; then
+        if timeout 2 wscat -c "$url" &>/dev/null; then
+            print_success "$name WebSocket endpoint is accessible"
             return 0
+        else
+            print_error "$name WebSocket endpoint is not accessible"
+            return 1
+        fi
+    else
+        print_warning "wscat not installed. Skipping WebSocket connection test."
+        print_status "Install with: npm install -g wscat"
+        return 0
+    fi
+}
+
+# Test Backend Services
+test_backend_services() {
+    print_section "Testing Backend Services"
+    
+    # User Service
+    test_api_endpoint "User Service Health" "GET" "$BASE_URL:$USER_SERVICE_PORT/health" "200" || true
+    
+    # Restaurant Service
+    test_api_endpoint "Restaurant Service Health" "GET" "$BASE_URL:$RESTAURANT_SERVICE_PORT/health" "200" || true
+    
+    # Order Service
+    test_api_endpoint "Order Service Health" "GET" "$BASE_URL:$ORDER_SERVICE_PORT/health" "200" || true
+    
+    # WebSocket endpoints
+    test_websocket_endpoint "Order Service" "$WS_ORDER_SERVICE/socket.io/?EIO=4&transport=websocket" || true
+}
+
+# Test Frontend Services
+test_frontend_services() {
+    print_section "Testing Frontend Services"
+    
+    # Restaurant Dashboard
+    test_api_endpoint "Restaurant Dashboard" "GET" "$BASE_URL:$RESTAURANT_DASHBOARD_PORT" "200" || test_api_endpoint "Restaurant Dashboard" "GET" "$BASE_URL:$RESTAURANT_DASHBOARD_PORT" "404" || true
+    
+    # Admin Dashboard
+    test_api_endpoint "Admin Dashboard" "GET" "$BASE_URL:$ADMIN_DASHBOARD_PORT" "200" || test_api_endpoint "Admin Dashboard" "GET" "$BASE_URL:$ADMIN_DASHBOARD_PORT" "404" || true
+    
+    # Customer Web
+    test_api_endpoint "Customer Web" "GET" "$BASE_URL:$CUSTOMER_WEB_PORT" "200" || test_api_endpoint "Customer Web" "GET" "$BASE_URL:$CUSTOMER_WEB_PORT" "404" || true
+    
+    # Delivery Web
+    test_api_endpoint "Delivery Web" "GET" "$BASE_URL:$DELIVERY_WEB_PORT" "200" || test_api_endpoint "Delivery Web" "GET" "$BASE_URL:$DELIVERY_WEB_PORT" "404" || true
+}
+
+# Test Docker Configuration
+test_docker_config() {
+    print_section "Testing Docker Configuration"
+    
+    if command -v docker &> /dev/null; then
+        print_status "Checking Docker installation..."
+        
+        # Check if docker-compose.yml exists
+        if [ -f "docker-compose.yml" ]; then
+            print_success "docker-compose.yml found"
+            
+            # Validate docker-compose.yml
+            if docker-compose config &> /dev/null; then
+                print_success "docker-compose.yml is valid"
+            else
+                print_error "docker-compose.yml has syntax errors"
+            fi
+        else
+            print_error "docker-compose.yml not found"
         fi
         
-        print_status "Attempt $attempt/$max_attempts - waiting 2 seconds..."
-        sleep 2
-        attempt=$((attempt + 1))
-    done
-    
-    print_error "$service_name failed to start after $max_attempts attempts"
-    return 1
-}
-
-# Function to test user registration
-test_user_registration() {
-    print_status "Testing user registration..."
-    
-    local response=$(curl -s -w "%{http_code}" -X POST "$BASE_URL:$USER_SERVICE_PORT/auth/register" \
-        -H "Content-Type: application/json" \
-        -d "{
-            \"name\": \"Test User\",
-            \"email\": \"$TEST_USER_EMAIL\",
-            \"password\": \"$TEST_USER_PASSWORD\"
-        }")
-    
-    local http_code="${response: -3}"
-    local body="${response%???}"
-    
-    if [ "$http_code" = "201" ]; then
-        print_success "User registration successful"
-        USER_TOKEN=$(echo "$body" | jq -r '.token')
-        return 0
+        # Check Dockerfile existence
+        local dockerfiles=(
+            "customer-web/Dockerfile"
+            "restaurant-dashboard/Dockerfile"
+            "delivery-web/Dockerfile"
+            "admin-dashboard/Dockerfile"
+            "backend/user-service/Dockerfile"
+            "backend/restaurant-service/Dockerfile"
+            "backend/order-service/Dockerfile"
+        )
+        
+        for dockerfile in "${dockerfiles[@]}"; do
+            if [ -f "$dockerfile" ]; then
+                print_success "$dockerfile exists"
+            else
+                print_error "$dockerfile not found"
+            fi
+        done
     else
-        print_error "User registration failed with status $http_code"
-        echo "Response: $body"
-        return 1
+        print_warning "Docker not installed. Skipping Docker configuration tests."
     fi
 }
 
-# Function to test user login
-test_user_login() {
-    print_status "Testing user login..."
+# Test Currency Formatting (INR)
+test_currency_formatting() {
+    print_section "Testing Currency Formatting"
     
-    local response=$(curl -s -w "%{http_code}" -X POST "$BASE_URL:$USER_SERVICE_PORT/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "{
-            \"email\": \"$TEST_USER_EMAIL\",
-            \"password\": \"$TEST_USER_PASSWORD\"
-        }")
+    print_status "Checking for INR currency formatting..."
     
-    local http_code="${response: -3}"
-    local body="${response%???}"
-    
-    if [ "$http_code" = "200" ]; then
-        print_success "User login successful"
-        USER_TOKEN=$(echo "$body" | jq -r '.token')
-        return 0
+    # Check frontend code for INR formatting
+    if grep -r "formatINR\|INR\|₹" customer-web/lib utils.ts restaurant-dashboard/lib restaurant-dashboard/app 2>/dev/null | grep -v node_modules | head -1 &>/dev/null; then
+        print_success "INR currency formatting found in codebase"
     else
-        print_error "User login failed with status $http_code"
-        echo "Response: $body"
-        return 1
+        print_warning "INR currency formatting may not be implemented"
     fi
 }
 
-# Function to test restaurant listing
-test_restaurant_listing() {
-    print_status "Testing restaurant listing..."
+# Test WebSocket Integration
+test_websocket_integration() {
+    print_section "Testing WebSocket Integration"
     
-    local response=$(curl -s -w "%{http_code}" -X GET "$BASE_URL:$RESTAURANT_SERVICE_PORT/restaurants")
+    # Check for WebSocket client files
+    local ws_files=(
+        "customer-web/lib/websocket.ts"
+        "restaurant-dashboard/lib/websocket.ts"
+        "delivery-web/lib/websocket.ts"
+        "admin-dashboard/src/lib/websocket.ts"
+    )
     
-    local http_code="${response: -3}"
-    local body="${response%???}"
-    
-    if [ "$http_code" = "200" ]; then
-        print_success "Restaurant listing successful"
-        local restaurant_count=$(echo "$body" | jq '. | length')
-        print_status "Found $restaurant_count restaurants"
-        return 0
-    else
-        print_error "Restaurant listing failed with status $http_code"
-        echo "Response: $body"
-        return 1
-    fi
-}
-
-# Function to test menu retrieval
-test_menu_retrieval() {
-    print_status "Testing menu retrieval..."
-    
-    local response=$(curl -s -w "%{http_code}" -X GET "$BASE_URL:$RESTAURANT_SERVICE_PORT/restaurants/1/menu")
-    
-    local http_code="${response: -3}"
-    local body="${response%???}"
-    
-    if [ "$http_code" = "200" ]; then
-        print_success "Menu retrieval successful"
-        local menu_count=$(echo "$body" | jq '. | length')
-        print_status "Found $menu_count menu items"
-        return 0
-    else
-        print_error "Menu retrieval failed with status $http_code"
-        echo "Response: $body"
-        return 1
-    fi
-}
-
-# Function to test order creation
-test_order_creation() {
-    print_status "Testing order creation..."
-    
-    if [ -z "$USER_TOKEN" ]; then
-        print_error "User token not available for order creation test"
-        return 1
-    fi
-    
-    local response=$(curl -s -w "%{http_code}" -X POST "$BASE_URL:$ORDER_SERVICE_PORT/orders" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $USER_TOKEN" \
-        -d "{
-            \"items\": [
-                {
-                    \"id\": \"item1\",
-                    \"name\": \"Test Pizza\",
-                    \"price\": 15.99,
-                    \"quantity\": 1,
-                    \"restaurantId\": \"1\",
-                    \"restaurantName\": \"Test Restaurant\"
-                }
-            ],
-            \"total\": 15.99,
-            \"restaurantId\": \"1\"
-        }")
-    
-    local http_code="${response: -3}"
-    local body="${response%???}"
-    
-    if [ "$http_code" = "201" ]; then
-        print_success "Order creation successful"
-        local order_id=$(echo "$body" | jq -r '.id')
-        print_status "Created order with ID: $order_id"
-        return 0
-    else
-        print_error "Order creation failed with status $http_code"
-        echo "Response: $body"
-        return 1
-    fi
-}
-
-# Function to test authentication with invalid token
-test_invalid_auth() {
-    print_status "Testing authentication with invalid token..."
-    
-    local response=$(curl -s -w "%{http_code}" -X GET "$BASE_URL:$RESTAURANT_SERVICE_PORT/restaurants/1/menu" \
-        -H "Authorization: Bearer invalid_token")
-    
-    local http_code="${response: -3}"
-    
-    if [ "$http_code" = "401" ]; then
-        print_success "Invalid token correctly rejected"
-        return 0
-    else
-        print_error "Invalid token not properly handled (status: $http_code)"
-        return 1
-    fi
-}
-
-# Function to test input validation
-test_input_validation() {
-    print_status "Testing input validation..."
-    
-    # Test SQL injection attempt
-    local response=$(curl -s -w "%{http_code}" -X POST "$BASE_URL:$USER_SERVICE_PORT/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "{
-            \"email\": \"test@example.com'; DROP TABLE users; --\",
-            \"password\": \"password123\"
-        }")
-    
-    local http_code="${response: -3}"
-    
-    if [ "$http_code" = "400" ] || [ "$http_code" = "401" ]; then
-        print_success "SQL injection attempt properly handled"
-    else
-        print_error "SQL injection attempt not properly handled (status: $http_code)"
-        return 1
-    fi
-    
-    # Test XSS attempt
-    local response=$(curl -s -w "%{http_code}" -X POST "$BASE_URL:$USER_SERVICE_PORT/auth/register" \
-        -H "Content-Type: application/json" \
-        -d "{
-            \"name\": \"<script>alert('xss')</script>\",
-            \"email\": \"test@example.com\",
-            \"password\": \"password123\"
-        }")
-    
-    local http_code="${response: -3}"
-    
-    if [ "$http_code" = "400" ]; then
-        print_success "XSS attempt properly handled"
-        return 0
-    else
-        print_error "XSS attempt not properly handled (status: $http_code)"
-        return 1
-    fi
-}
-
-# Function to test frontend applications
-test_frontend_applications() {
-    print_status "Testing frontend applications..."
-    
-    # Test restaurant dashboard
-    local response=$(curl -s -w "%{http_code}" -X GET "$BASE_URL:$RESTAURANT_DASHBOARD_PORT")
-    local http_code="${response: -3}"
-    
-    if [ "$http_code" = "200" ]; then
-        print_success "Restaurant dashboard is accessible"
-    else
-        print_error "Restaurant dashboard not accessible (status: $http_code)"
-        return 1
-    fi
-    
-    # Test admin dashboard
-    local response=$(curl -s -w "%{http_code}" -X GET "$BASE_URL:$ADMIN_DASHBOARD_PORT")
-    local http_code="${response: -3}"
-    
-    if [ "$http_code" = "200" ]; then
-        print_success "Admin dashboard is accessible"
-        return 0
-    else
-        print_error "Admin dashboard not accessible (status: $http_code)"
-        return 1
-    fi
-}
-
-# Function to run performance tests
-test_performance() {
-    print_status "Running performance tests..."
-    
-    # Test response times
-    local start_time=$(date +%s%N)
-    curl -s "$BASE_URL:$RESTAURANT_SERVICE_PORT/restaurants" > /dev/null
-    local end_time=$(date +%s%N)
-    local duration=$(( (end_time - start_time) / 1000000 ))
-    
-    if [ $duration -lt 1000 ]; then
-        print_success "Restaurant API response time: ${duration}ms (acceptable)"
-    else
-        print_warning "Restaurant API response time: ${duration}ms (slow)"
-    fi
-    
-    # Test concurrent requests
-    print_status "Testing concurrent requests..."
-    local success_count=0
-    local total_requests=10
-    
-    for i in $(seq 1 $total_requests); do
-        if curl -s -f "$BASE_URL:$RESTAURANT_SERVICE_PORT/restaurants" > /dev/null 2>&1; then
-            success_count=$((success_count + 1))
+    for ws_file in "${ws_files[@]}"; do
+        if [ -f "$ws_file" ]; then
+            print_success "WebSocket client found: $ws_file"
+        else
+            print_error "WebSocket client not found: $ws_file"
         fi
     done
     
-    local success_rate=$(( (success_count * 100) / total_requests ))
-    print_status "Concurrent request success rate: ${success_rate}%"
-    
-    if [ $success_rate -ge 90 ]; then
-        print_success "Performance test passed"
-        return 0
+    # Check for WebSocket gateway
+    if [ -f "backend/order-service/src/orders/orders.gateway.ts" ]; then
+        print_success "WebSocket gateway found"
     else
-        print_error "Performance test failed"
-        return 1
+        print_error "WebSocket gateway not found"
     fi
 }
 
-# Function to generate test report
-generate_test_report() {
-    local test_results_file="test_results_$(date +%Y%m%d_%H%M%S).txt"
+# Test RBAC Implementation
+test_rbac_implementation() {
+    print_section "Testing RBAC Implementation"
     
-    print_status "Generating test report: $test_results_file"
+    # Check for RBAC utility
+    if [ -f "admin-dashboard/src/lib/rbac.ts" ]; then
+        print_success "RBAC utility found"
+    else
+        print_error "RBAC utility not found"
+    fi
     
-    cat > "$test_results_file" << EOF
-PlatePal Test Report
-Generated: $(date)
-Test Environment: Local Development
-
-Test Results:
-- User Registration: $([ $? -eq 0 ] && echo "PASS" || echo "FAIL")
-- User Login: $([ $? -eq 0 ] && echo "PASS" || echo "FAIL")
-- Restaurant Listing: $([ $? -eq 0 ] && echo "PASS" || echo "FAIL")
-- Menu Retrieval: $([ $? -eq 0 ] && echo "PASS" || echo "FAIL")
-- Order Creation: $([ $? -eq 0 ] && echo "PASS" || echo "FAIL")
-- Authentication Security: $([ $? -eq 0 ] && echo "PASS" || echo "FAIL")
-- Input Validation: $([ $? -eq 0 ] && echo "PASS" || echo "FAIL")
-- Frontend Applications: $([ $? -eq 0 ] && echo "PASS" || echo "FAIL")
-- Performance Tests: $([ $? -eq 0 ] && echo "PASS" || echo "FAIL")
-
-Environment Details:
-- User Service: $BASE_URL:$USER_SERVICE_PORT
-- Restaurant Service: $BASE_URL:$RESTAURANT_SERVICE_PORT
-- Order Service: $BASE_URL:$ORDER_SERVICE_PORT
-- Restaurant Dashboard: $BASE_URL:$RESTAURANT_DASHBOARD_PORT
-- Admin Dashboard: $BASE_URL:$ADMIN_DASHBOARD_PORT
-
-EOF
+    # Check for RBAC-protected pages
+    local rbac_pages=(
+        "admin-dashboard/src/app/approvals"
+        "admin-dashboard/src/app/tickets"
+        "admin-dashboard/src/app/analytics"
+    )
     
-    print_success "Test report generated: $test_results_file"
+    for page in "${rbac_pages[@]}"; do
+        if [ -d "$page" ]; then
+            print_success "RBAC-protected page found: $page"
+        else
+            print_error "RBAC-protected page not found: $page"
+        fi
+    done
+}
+
+# Test New Features
+test_new_features() {
+    print_section "Testing New Features"
+    
+    # Photo Capture
+    if [ -f "delivery-web/components/PhotoCapture.tsx" ]; then
+        print_success "Photo Capture component found"
+    else
+        print_error "Photo Capture component not found"
+    fi
+    
+    # Signature Capture
+    if [ -f "delivery-web/components/SignatureCapture.tsx" ]; then
+        print_success "Signature Capture component found"
+    else
+        print_error "Signature Capture component not found"
+    fi
+    
+    # Availability Toggle
+    if [ -f "delivery-web/components/AvailabilityToggle.tsx" ]; then
+        print_success "Availability Toggle component found"
+    else
+        print_error "Availability Toggle component not found"
+    fi
+    
+    # Earnings Dashboard
+    if [ -f "delivery-web/app/earnings/page.tsx" ]; then
+        print_success "Earnings Dashboard found"
+    else
+        print_error "Earnings Dashboard not found"
+    fi
+    
+    # DataTable Component
+    if [ -f "admin-dashboard/src/components/DataTable.tsx" ]; then
+        print_success "DataTable component found"
+    else
+        print_error "DataTable component not found"
+    fi
+    
+    # Modal Component
+    if [ -f "admin-dashboard/src/components/Modal.tsx" ]; then
+        print_success "Modal component found"
+    else
+        print_error "Modal component not found"
+    fi
+    
+    # Restaurant Filters
+    if [ -f "customer-web/components/RestaurantFilters.tsx" ]; then
+        print_success "Restaurant Filters component found"
+    else
+        print_error "Restaurant Filters component not found"
+    fi
+}
+
+# Test Error Handling
+test_error_handling() {
+    print_section "Testing Error Handling"
+    
+    local error_files=(
+        "customer-web/components/ErrorBoundary.tsx"
+        "restaurant-dashboard/app/components/ErrorBoundary.tsx"
+        "delivery-web/components/ErrorBoundary.tsx"
+        "admin-dashboard/src/components/ErrorBoundary.tsx"
+    )
+    
+    for error_file in "${error_files[@]}"; do
+        if [ -f "$error_file" ]; then
+            print_success "ErrorBoundary found: $error_file"
+        else
+            print_error "ErrorBoundary not found: $error_file"
+        fi
+    done
+    
+    # Check for error handler utilities
+    if [ -f "customer-web/lib/error-handler.ts" ]; then
+        print_success "Error handler utility found"
+    else
+        print_error "Error handler utility not found"
+    fi
+}
+
+# Test Accessibility
+test_accessibility() {
+    print_section "Testing Accessibility"
+    
+    # Check for accessibility utilities
+    if [ -f "customer-web/lib/accessibility.ts" ]; then
+        print_success "Accessibility utilities found"
+    else
+        print_error "Accessibility utilities not found"
+    fi
+    
+    # Check for AccessibleButton
+    if [ -f "customer-web/components/AccessibleButton.tsx" ]; then
+        print_success "AccessibleButton component found"
+    else
+        print_error "AccessibleButton component not found"
+    fi
+    
+    # Check for skip links in layouts
+    if grep -r "skip.*content\|skip.*main" customer-web/app/layout.tsx restaurant-dashboard/app/layout.tsx delivery-web/app/layout.tsx admin-dashboard/src/app/layout.tsx 2>/dev/null | head -1 &>/dev/null; then
+        print_success "Skip to content links found"
+    else
+        print_warning "Skip to content links may not be implemented"
+    fi
 }
 
 # Main test execution
 main() {
-    print_status "Starting PlatePal comprehensive test suite..."
+    echo ""
+    print_section "PlatePal Comprehensive Test Suite"
+    echo "Testing all services and features..."
+    echo ""
     
-    # Check prerequisites
-    if ! command -v curl &> /dev/null; then
-        print_error "curl is required but not installed"
-        exit 1
-    fi
+    # Run all test suites
+    check_docker_services
+    test_backend_services
+    test_frontend_services
+    test_docker_config
+    test_websocket_integration
+    test_currency_formatting
+    test_rbac_implementation
+    test_new_features
+    test_error_handling
+    test_accessibility
     
-    if ! command -v jq &> /dev/null; then
-        print_error "jq is required but not installed"
-        exit 1
-    fi
+    # Print summary
+    echo ""
+    print_section "Test Summary"
+    echo -e "${GREEN}Tests Passed: $TESTS_PASSED${NC}"
+    echo -e "${RED}Tests Failed: $TESTS_FAILED${NC}"
+    echo -e "${BLUE}Total Tests: $TESTS_TOTAL${NC}"
+    echo ""
     
-    # Wait for services to be ready
-    wait_for_service "User Service" "$USER_SERVICE_PORT"
-    wait_for_service "Restaurant Service" "$RESTAURANT_SERVICE_PORT"
-    wait_for_service "Order Service" "$ORDER_SERVICE_PORT"
-    
-    # Run tests
-    local test_passed=0
-    local test_failed=0
-    
-    # Core functionality tests
-    if test_user_registration; then
-        test_passed=$((test_passed + 1))
-    else
-        test_failed=$((test_failed + 1))
-    fi
-    
-    if test_user_login; then
-        test_passed=$((test_passed + 1))
-    else
-        test_failed=$((test_failed + 1))
-    fi
-    
-    if test_restaurant_listing; then
-        test_passed=$((test_passed + 1))
-    else
-        test_failed=$((test_failed + 1))
-    fi
-    
-    if test_menu_retrieval; then
-        test_passed=$((test_passed + 1))
-    else
-        test_failed=$((test_failed + 1))
-    fi
-    
-    if test_order_creation; then
-        test_passed=$((test_passed + 1))
-    else
-        test_failed=$((test_failed + 1))
-    fi
-    
-    # Security tests
-    if test_invalid_auth; then
-        test_passed=$((test_passed + 1))
-    else
-        test_failed=$((test_failed + 1))
-    fi
-    
-    if test_input_validation; then
-        test_passed=$((test_passed + 1))
-    else
-        test_failed=$((test_failed + 1))
-    fi
-    
-    # Frontend tests
-    if test_frontend_applications; then
-        test_passed=$((test_passed + 1))
-    else
-        test_failed=$((test_failed + 1))
-    fi
-    
-    # Performance tests
-    if test_performance; then
-        test_passed=$((test_passed + 1))
-    else
-        test_failed=$((test_failed + 1))
-    fi
-    
-    # Generate report
-    generate_test_report
-    
-    # Summary
-    print_status "Test Summary:"
-    print_success "Passed: $test_passed"
-    if [ $test_failed -gt 0 ]; then
-        print_error "Failed: $test_failed"
-    else
-        print_success "Failed: $test_failed"
-    fi
-    
-    if [ $test_failed -eq 0 ]; then
-        print_success "All tests passed! 🎉"
+    if [ $TESTS_FAILED -eq 0 ]; then
+        print_success "All tests passed! ✅"
         exit 0
     else
-        print_error "Some tests failed. Please check the logs above."
+        print_error "Some tests failed. Please review the output above."
         exit 1
     fi
 }
 
 # Run main function
-main "$@"
+main

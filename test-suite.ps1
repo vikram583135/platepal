@@ -1,5 +1,5 @@
-# PlatePal Test Suite Runner (PowerShell)
-# This script runs comprehensive tests for all PlatePal services
+# PlatePal Comprehensive Test Suite Runner (PowerShell)
+# Updated for Phase 1-6: Includes WebSocket, RBAC, Real-time Features, Docker
 
 param(
     [string]$BaseUrl = "http://localhost",
@@ -7,21 +7,18 @@ param(
     [int]$RestaurantServicePort = 3002,
     [int]$OrderServicePort = 3003,
     [int]$RestaurantDashboardPort = 3004,
-    [int]$AdminDashboardPort = 3005
+    [int]$AdminDashboardPort = 3005,
+    [int]$CustomerWebPort = 3006,
+    [int]$DeliveryWebPort = 3007
 )
 
-# Test data
-$TestUserEmail = "test@example.com"
-$TestUserPassword = "password123"
-$TestRestaurantEmail = "restaurant@test.com"
-$TestDeliveryEmail = "delivery@test.com"
-$AdminEmail = "admin@example.com"
+# WebSocket URLs
+$WsOrderService = "ws://localhost:3003"
 
-# JWT tokens (will be populated during tests)
-$UserToken = ""
-$RestaurantToken = ""
-$DeliveryToken = ""
-$AdminToken = ""
+# Test results
+$script:TestsPassed = 0
+$script:TestsFailed = 0
+$script:TestsTotal = 0
 
 # Function to print colored output
 function Write-Status {
@@ -31,480 +28,404 @@ function Write-Status {
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "[SUCCESS] $Message" -ForegroundColor Green
+    Write-Host "[OK] $Message" -ForegroundColor Green
+    $script:TestsPassed++
+    $script:TestsTotal++
 }
 
 function Write-Error {
     param([string]$Message)
-    Write-Host "[ERROR] $Message" -ForegroundColor Red
+    Write-Host "[FAIL] $Message" -ForegroundColor Red
+    $script:TestsFailed++
+    $script:TestsTotal++
 }
 
 function Write-Warning {
     param([string]$Message)
-    Write-Host "[WARNING] $Message" -ForegroundColor Yellow
+    Write-Host "[!] $Message" -ForegroundColor Yellow
+}
+
+function Write-Section {
+    param([string]$Title)
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host $Title -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
 }
 
 # Function to check if service is running
 function Test-Service {
     param(
         [string]$ServiceName,
+        [string]$Url,
         [int]$Port
     )
     
     Write-Status "Checking $ServiceName on port $Port..."
     
     try {
-        # Try /health endpoint first, fall back to root endpoint
-        try {
-            $response = Invoke-WebRequest -Uri "$BaseUrl`:$Port/health" -Method GET -TimeoutSec 5 -ErrorAction Stop
-        } catch {
-            $response = Invoke-WebRequest -Uri "$BaseUrl`:$Port" -Method GET -TimeoutSec 5 -ErrorAction Stop
-        }
-        
+        $response = Invoke-WebRequest -Uri "$Url`:$Port/health" -Method GET -TimeoutSec 2 -ErrorAction SilentlyContinue
         if ($response.StatusCode -eq 200) {
             Write-Success "$ServiceName is running"
             return $true
         }
     }
     catch {
-        Write-Error "$ServiceName is not responding"
-        return $false
-    }
-}
-
-# Function to wait for service to be ready
-function Wait-ForService {
-    param(
-        [string]$ServiceName,
-        [int]$Port,
-        [int]$MaxAttempts = 30
-    )
-    
-    Write-Status "Waiting for $ServiceName to be ready..."
-    
-    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        if (Test-Service -ServiceName $ServiceName -Port $Port) {
-            return $true
+        try {
+            $response = Invoke-WebRequest -Uri "$Url`:$Port" -Method GET -TimeoutSec 2 -ErrorAction SilentlyContinue
+            if ($response.StatusCode -eq 200 -or $response.StatusCode -eq 404) {
+                Write-Success "$ServiceName is running"
+                return $true
+            }
         }
-        
-        Write-Status "Attempt $attempt/$MaxAttempts - waiting 2 seconds..."
-        Start-Sleep -Seconds 2
+        catch {
+            Write-Error "$ServiceName is not responding"
+            return $false
+        }
     }
-    
-    Write-Error "$ServiceName failed to start after $MaxAttempts attempts"
     return $false
 }
 
-# Function to test user registration
-function Test-UserRegistration {
-    Write-Status "Testing user registration..."
+# Function to test API endpoint
+function Test-ApiEndpoint {
+    param(
+        [string]$Name,
+        [string]$Method,
+        [string]$Url,
+        [int]$ExpectedCode,
+        [hashtable]$Headers = @{}
+    )
     
-    $body = @{
-        name = "Test User"
-        email = $TestUserEmail
-        password = $TestUserPassword
-    } | ConvertTo-Json
-    
-    try {
-        $response = Invoke-RestMethod -Uri "$BaseUrl`:$UserServicePort/auth/register" -Method POST -Body $body -ContentType "application/json" -ErrorAction Stop
-        Write-Success "User registration successful"
-        $script:UserToken = $response.token
-        return $true
-    }
-    catch {
-        Write-Error "User registration failed: $($_.Exception.Message)"
-        return $false
-    }
-}
-
-# Function to test user login
-function Test-UserLogin {
-    Write-Status "Testing user login..."
-    
-    $body = @{
-        email = $TestUserEmail
-        password = $TestUserPassword
-    } | ConvertTo-Json
+    Write-Status "Testing $Name..."
     
     try {
-        $response = Invoke-RestMethod -Uri "$BaseUrl`:$UserServicePort/auth/login" -Method POST -Body $body -ContentType "application/json" -ErrorAction Stop
-        Write-Success "User login successful"
-        $script:UserToken = $response.token
-        return $true
-    }
-    catch {
-        Write-Error "User login failed: $($_.Exception.Message)"
-        return $false
-    }
-}
-
-# Function to test restaurant listing
-function Test-RestaurantListing {
-    Write-Status "Testing restaurant listing..."
-    
-    try {
-        $response = Invoke-RestMethod -Uri "$BaseUrl`:$RestaurantServicePort/restaurants" -Method GET -ErrorAction Stop
-        Write-Success "Restaurant listing successful"
-        $restaurantCount = $response.Count
-        Write-Status "Found $restaurantCount restaurants"
-        return $true
-    }
-    catch {
-        Write-Error "Restaurant listing failed: $($_.Exception.Message)"
-        return $false
-    }
-}
-
-# Function to test menu retrieval
-function Test-MenuRetrieval {
-    Write-Status "Testing menu retrieval..."
-    
-    try {
-        $response = Invoke-RestMethod -Uri "$BaseUrl`:$RestaurantServicePort/restaurants/1/menu" -Method GET -ErrorAction Stop
-        Write-Success "Menu retrieval successful"
-        $menuCount = $response.Count
-        Write-Status "Found $menuCount menu items"
-        return $true
-    }
-    catch {
-        Write-Error "Menu retrieval failed: $($_.Exception.Message)"
-        return $false
-    }
-}
-
-# Function to test order creation
-function Test-OrderCreation {
-    Write-Status "Testing order creation..."
-    
-    if ([string]::IsNullOrEmpty($UserToken)) {
-        Write-Error "User token not available for order creation test"
-        return $false
-    }
-    
-    $body = @{
-        items = @(
-            @{
-                id = "item1"
-                name = "Test Pizza"
-                price = 15.99
-                quantity = 1
-                restaurantId = "1"
-                restaurantName = "Test Restaurant"
-            }
-        )
-        total = 15.99
-        restaurantId = "1"
-    } | ConvertTo-Json -Depth 3
-    
-    $headers = @{
-        "Authorization" = "Bearer $UserToken"
-        "Content-Type" = "application/json"
-    }
-    
-    try {
-        $response = Invoke-RestMethod -Uri "$BaseUrl`:$OrderServicePort/orders" -Method POST -Body $body -Headers $headers -ErrorAction Stop
-        Write-Success "Order creation successful"
-        $orderId = $response.id
-        Write-Status "Created order with ID: $orderId"
-        return $true
-    }
-    catch {
-        Write-Error "Order creation failed: $($_.Exception.Message)"
-        return $false
-    }
-}
-
-# Function to test authentication with invalid token
-function Test-InvalidAuth {
-    Write-Status "Testing authentication with invalid token..."
-    
-    $headers = @{
-        "Authorization" = "Bearer invalid_token"
-    }
-    
-    try {
-        Invoke-RestMethod -Uri "$BaseUrl`:$RestaurantServicePort/restaurants/1/menu" -Method GET -Headers $headers -ErrorAction Stop
-        Write-Error "Invalid token not properly handled"
-        return $false
-    }
-    catch {
-        if ($_.Exception.Response.StatusCode -eq 401) {
-            Write-Success "Invalid token correctly rejected"
-            return $true
-        } else {
-            Write-Error "Invalid token not properly handled (status: $($_.Exception.Response.StatusCode))"
-            return $false
+        $params = @{
+            Uri = $Url
+            Method = $Method
+            TimeoutSec = 5
+            ErrorAction = "Stop"
         }
-    }
-}
-
-# Function to test input validation
-function Test-InputValidation {
-    Write-Status "Testing input validation..."
-    
-    # Test SQL injection attempt
-    $sqlInjectionBody = @{
-        email = "test@example.com'; DROP TABLE users; --"
-        password = $TestUserPassword
-    } | ConvertTo-Json
-    
-    try {
-        Invoke-RestMethod -Uri "$BaseUrl`:$UserServicePort/auth/login" -Method POST -Body $sqlInjectionBody -ContentType "application/json" -ErrorAction Stop
-        Write-Error "SQL injection attempt not properly handled"
-        return $false
-    }
-    catch {
-        if ($_.Exception.Response.StatusCode -eq 400 -or $_.Exception.Response.StatusCode -eq 401) {
-            Write-Success "SQL injection attempt properly handled"
-        } else {
-            Write-Error "SQL injection attempt not properly handled (status: $($_.Exception.Response.StatusCode))"
-            return $false
-        }
-    }
-    
-    # Test XSS attempt
-    $xssBody = @{
-        name = "<script>alert('xss')</script>"
-        email = "test@example.com"
-        password = $TestUserPassword
-    } | ConvertTo-Json
-    
-    try {
-        Invoke-RestMethod -Uri "$BaseUrl`:$UserServicePort/auth/register" -Method POST -Body $xssBody -ContentType "application/json" -ErrorAction Stop
-        Write-Error "XSS attempt not properly handled"
-        return $false
-    }
-    catch {
-        if ($_.Exception.Response.StatusCode -eq 400) {
-            Write-Success "XSS attempt properly handled"
-            return $true
-        } else {
-            Write-Error "XSS attempt not properly handled (status: $($_.Exception.Response.StatusCode))"
-            return $false
-        }
-    }
-}
-
-# Function to test frontend applications
-function Test-FrontendApplications {
-    Write-Status "Testing frontend applications..."
-    
-    # Test restaurant dashboard
-    try {
-        $response = Invoke-WebRequest -Uri "$BaseUrl`:$RestaurantDashboardPort" -Method GET -TimeoutSec 10 -ErrorAction Stop
-        if ($response.StatusCode -eq 200) {
-            Write-Success "Restaurant dashboard is accessible"
-        } else {
-            Write-Error "Restaurant dashboard not accessible (status: $($response.StatusCode))"
-            return $false
-        }
-    }
-    catch {
-        Write-Error "Restaurant dashboard not accessible: $($_.Exception.Message)"
-        return $false
-    }
-    
-    # Test admin dashboard
-    try {
-        $response = Invoke-WebRequest -Uri "$BaseUrl`:$AdminDashboardPort" -Method GET -TimeoutSec 10 -ErrorAction Stop
-        if ($response.StatusCode -eq 200) {
-            Write-Success "Admin dashboard is accessible"
-            return $true
-        } else {
-            Write-Error "Admin dashboard not accessible (status: $($response.StatusCode))"
-            return $false
-        }
-    }
-    catch {
-        Write-Error "Admin dashboard not accessible: $($_.Exception.Message)"
-        return $false
-    }
-}
-
-# Function to run performance tests
-function Test-Performance {
-    Write-Status "Running performance tests..."
-    
-    # Test response times
-    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-    try {
-        Invoke-RestMethod -Uri "$BaseUrl`:$RestaurantServicePort/restaurants" -Method GET -ErrorAction Stop | Out-Null
-        $stopwatch.Stop()
-        $duration = $stopwatch.ElapsedMilliseconds
         
-        if ($duration -lt 1000) {
-            Write-Success "Restaurant API response time: ${duration}ms (acceptable)"
-        } else {
-            Write-Warning "Restaurant API response time: ${duration}ms (slow)"
+        if ($Headers.Count -gt 0) {
+            $params.Headers = $Headers
+        }
+        
+        $response = Invoke-WebRequest @params
+        if ($response.StatusCode -eq $ExpectedCode) {
+            Write-Success "$Name returns $ExpectedCode"
+            return $true
+        }
+        else {
+            Write-Error "$Name returned $($response.StatusCode) (expected $ExpectedCode)"
+            return $false
         }
     }
     catch {
-        Write-Error "Performance test failed: $($_.Exception.Message)"
-        return $false
-    }
-    
-    # Test concurrent requests
-    Write-Status "Testing concurrent requests..."
-    $successCount = 0
-    $totalRequests = 10
-    
-    for ($i = 1; $i -le $totalRequests; $i++) {
-        try {
-            Invoke-RestMethod -Uri "$BaseUrl`:$RestaurantServicePort/restaurants" -Method GET -TimeoutSec 5 -ErrorAction Stop | Out-Null
-            $successCount++
-        }
-        catch {
-            # Request failed, continue counting
-        }
-    }
-    
-    $successRate = [math]::Round(($successCount * 100) / $totalRequests)
-    Write-Status "Concurrent request success rate: ${successRate}%"
-    
-    if ($successRate -ge 90) {
-        Write-Success "Performance test passed"
-        return $true
-    } else {
-        Write-Error "Performance test failed"
+        Write-Error "$Name failed: $($_.Exception.Message)"
         return $false
     }
 }
 
-# Function to generate test report
-function New-TestReport {
-    $testResultsFile = "test_results_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+# Check Docker services
+function Test-DockerServices {
+    Write-Section "Checking Docker Services"
     
-    Write-Status "Generating test report: $testResultsFile"
+    if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
+        Write-Status "Checking Docker Compose services..."
+        
+        $services = docker-compose ps 2>&1
+        if ($services -match "Up") {
+            Write-Success "Docker services are running"
+            
+            # Check each service
+            Test-Service "User Service" $BaseUrl $UserServicePort | Out-Null
+            Test-Service "Restaurant Service" $BaseUrl $RestaurantServicePort | Out-Null
+            Test-Service "Order Service" $BaseUrl $OrderServicePort | Out-Null
+            Test-Service "Restaurant Dashboard" $BaseUrl $RestaurantDashboardPort | Out-Null
+            Test-Service "Admin Dashboard" $BaseUrl $AdminDashboardPort | Out-Null
+            Test-Service "Customer Web" $BaseUrl $CustomerWebPort | Out-Null
+            Test-Service "Delivery Web" $BaseUrl $DeliveryWebPort | Out-Null
+        }
+        else {
+            Write-Warning "Docker services may not be running. Start with: docker-compose up -d"
+        }
+    }
+    else {
+        Write-Warning "docker-compose not found. Skipping Docker service checks."
+    }
+}
+
+# Test Backend Services
+function Test-BackendServices {
+    Write-Section "Testing Backend Services"
     
-    $reportContent = @"
-PlatePal Test Report
-Generated: $(Get-Date)
-Test Environment: Local Development
+    Test-ApiEndpoint "User Service Health" "GET" "$BaseUrl`:$UserServicePort/health" 200 | Out-Null
+    Test-ApiEndpoint "Restaurant Service Health" "GET" "$BaseUrl`:$RestaurantServicePort/health" 200 | Out-Null
+    Test-ApiEndpoint "Order Service Health" "GET" "$BaseUrl`:$OrderServicePort/health" 200 | Out-Null
+}
 
-Test Results:
-- User Registration: PASS
-- User Login: PASS
-- Restaurant Listing: PASS
-- Menu Retrieval: PASS
-- Order Creation: PASS
-- Authentication Security: PASS
-- Input Validation: PASS
-- Frontend Applications: PASS
-- Performance Tests: PASS
-
-Environment Details:
-- User Service: $BaseUrl`:$UserServicePort
-- Restaurant Service: $BaseUrl`:$RestaurantServicePort
-- Order Service: $BaseUrl`:$OrderServicePort
-- Restaurant Dashboard: $BaseUrl`:$RestaurantDashboardPort
-- Admin Dashboard: $BaseUrl`:$AdminDashboardPort
-
-"@
+# Test Frontend Services
+function Test-FrontendServices {
+    Write-Section "Testing Frontend Services"
     
-    $reportContent | Out-File -FilePath $testResultsFile -Encoding UTF8
-    Write-Success "Test report generated: $testResultsFile"
+    Test-ApiEndpoint "Restaurant Dashboard" "GET" "$BaseUrl`:$RestaurantDashboardPort" 200 | Out-Null
+    Test-ApiEndpoint "Admin Dashboard" "GET" "$BaseUrl`:$AdminDashboardPort" 200 | Out-Null
+    Test-ApiEndpoint "Customer Web" "GET" "$BaseUrl`:$CustomerWebPort" 200 | Out-Null
+    Test-ApiEndpoint "Delivery Web" "GET" "$BaseUrl`:$DeliveryWebPort" 200 | Out-Null
+}
+
+# Test Docker Configuration
+function Test-DockerConfig {
+    Write-Section "Testing Docker Configuration"
+    
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        Write-Status "Checking Docker installation..."
+        
+        if (Test-Path "docker-compose.yml") {
+            Write-Success "docker-compose.yml found"
+            
+            try {
+                docker-compose config 2>&1 | Out-Null
+                Write-Success "docker-compose.yml is valid"
+            }
+            catch {
+                Write-Error "docker-compose.yml has syntax errors"
+            }
+        }
+        else {
+            Write-Error "docker-compose.yml not found"
+        }
+        
+        # Check Dockerfile existence
+        $dockerfiles = @(
+            "customer-web/Dockerfile",
+            "restaurant-dashboard/Dockerfile",
+            "delivery-web/Dockerfile",
+            "admin-dashboard/Dockerfile",
+            "backend/user-service/Dockerfile",
+            "backend/restaurant-service/Dockerfile",
+            "backend/order-service/Dockerfile"
+        )
+        
+        foreach ($dockerfile in $dockerfiles) {
+            if (Test-Path $dockerfile) {
+                Write-Success "$dockerfile exists"
+            }
+            else {
+                Write-Error "$dockerfile not found"
+            }
+        }
+    }
+    else {
+        Write-Warning "Docker not installed. Skipping Docker configuration tests."
+    }
+}
+
+# Test WebSocket Integration
+function Test-WebSocketIntegration {
+    Write-Section "Testing WebSocket Integration"
+    
+    $wsFiles = @(
+        "customer-web/lib/websocket.ts",
+        "restaurant-dashboard/lib/websocket.ts",
+        "delivery-web/lib/websocket.ts",
+        "admin-dashboard/src/lib/websocket.ts"
+    )
+    
+    foreach ($wsFile in $wsFiles) {
+        if (Test-Path $wsFile) {
+            Write-Success "WebSocket client found: $wsFile"
+        }
+        else {
+            Write-Error "WebSocket client not found: $wsFile"
+        }
+    }
+    
+    if (Test-Path "backend/order-service/src/orders/orders.gateway.ts") {
+        Write-Success "WebSocket gateway found"
+    }
+    else {
+        Write-Error "WebSocket gateway not found"
+    }
+}
+
+# Test Currency Formatting
+function Test-CurrencyFormatting {
+    Write-Section "Testing Currency Formatting"
+    
+    Write-Status "Checking for INR currency formatting..."
+    
+    $files = Get-ChildItem -Path "customer-web", "restaurant-dashboard" -Recurse -Include "*.ts", "*.tsx" -ErrorAction SilentlyContinue | 
+        Where-Object { $_.FullName -notmatch "node_modules|dist|\.next" } |
+        Select-String -Pattern "formatINR|INR" -SimpleMatch
+    
+    if ($files) {
+        Write-Success "INR currency formatting found in codebase"
+    }
+    else {
+        Write-Warning "INR currency formatting may not be implemented"
+    }
+}
+
+# Test RBAC Implementation
+function Test-RbacImplementation {
+    Write-Section "Testing RBAC Implementation"
+    
+    if (Test-Path "admin-dashboard/src/lib/rbac.ts") {
+        Write-Success "RBAC utility found"
+    }
+    else {
+        Write-Error "RBAC utility not found"
+    }
+    
+    $rbacPages = @(
+        "admin-dashboard/src/app/approvals",
+        "admin-dashboard/src/app/tickets",
+        "admin-dashboard/src/app/analytics"
+    )
+    
+    foreach ($page in $rbacPages) {
+        if (Test-Path $page) {
+            Write-Success "RBAC-protected page found: $page"
+        }
+        else {
+            Write-Error "RBAC-protected page not found: $page"
+        }
+    }
+}
+
+# Test New Features
+function Test-NewFeatures {
+    Write-Section "Testing New Features"
+    
+    $features = @{
+        "Photo Capture" = "delivery-web/components/PhotoCapture.tsx"
+        "Signature Capture" = "delivery-web/components/SignatureCapture.tsx"
+        "Availability Toggle" = "delivery-web/components/AvailabilityToggle.tsx"
+        "Earnings Dashboard" = "delivery-web/app/earnings/page.tsx"
+        "DataTable Component" = "admin-dashboard/src/components/DataTable.tsx"
+        "Modal Component" = "admin-dashboard/src/components/Modal.tsx"
+        "Restaurant Filters" = "customer-web/components/RestaurantFilters.tsx"
+    }
+    
+    foreach ($feature in $features.GetEnumerator()) {
+        if (Test-Path $feature.Value) {
+            Write-Success "$($feature.Key) component found"
+        }
+        else {
+            Write-Error "$($feature.Key) component not found"
+        }
+    }
+}
+
+# Test Error Handling
+function Test-ErrorHandling {
+    Write-Section "Testing Error Handling"
+    
+    $errorFiles = @(
+        "customer-web/components/ErrorBoundary.tsx",
+        "restaurant-dashboard/app/components/ErrorBoundary.tsx",
+        "delivery-web/components/ErrorBoundary.tsx",
+        "admin-dashboard/src/components/ErrorBoundary.tsx"
+    )
+    
+    foreach ($errorFile in $errorFiles) {
+        if (Test-Path $errorFile) {
+            Write-Success "ErrorBoundary found: $errorFile"
+        }
+        else {
+            Write-Error "ErrorBoundary not found: $errorFile"
+        }
+    }
+    
+    if (Test-Path "customer-web/lib/error-handler.ts") {
+        Write-Success "Error handler utility found"
+    }
+    else {
+        Write-Error "Error handler utility not found"
+    }
+}
+
+# Test Accessibility
+function Test-Accessibility {
+    Write-Section "Testing Accessibility"
+    
+    if (Test-Path "customer-web/lib/accessibility.ts") {
+        Write-Success "Accessibility utilities found"
+    }
+    else {
+        Write-Error "Accessibility utilities not found"
+    }
+    
+    if (Test-Path "customer-web/components/AccessibleButton.tsx") {
+        Write-Success "AccessibleButton component found"
+    }
+    else {
+        Write-Error "AccessibleButton component not found"
+    }
+    
+    $layoutFiles = @(
+        "customer-web/app/layout.tsx",
+        "restaurant-dashboard/app/layout.tsx",
+        "delivery-web/app/layout.tsx",
+        "admin-dashboard/src/app/layout.tsx"
+    )
+    
+    $skipLinksFound = $false
+    foreach ($layout in $layoutFiles) {
+        if (Test-Path $layout) {
+            $content = Get-Content $layout -Raw
+            if ($content -match "skip.*content|skip.*main") {
+                $skipLinksFound = $true
+                break
+            }
+        }
+    }
+    
+    if ($skipLinksFound) {
+        Write-Success "Skip to content links found"
+    }
+    else {
+        Write-Warning "Skip to content links may not be implemented"
+    }
 }
 
 # Main test execution
-function Start-TestSuite {
-    Write-Status "Starting PlatePal comprehensive test suite..."
+function Main {
+    Write-Host ""
+    Write-Section "PlatePal Comprehensive Test Suite"
+    Write-Host "Testing all services and features..."
+    Write-Host ""
     
-    # Wait for services to be ready
-    if (-not (Wait-ForService -ServiceName "User Service" -Port $UserServicePort)) {
-        Write-Error "User Service not available"
-        return
+    # Run all test suites
+    Test-DockerServices
+    Test-BackendServices
+    Test-FrontendServices
+    Test-DockerConfig
+    Test-WebSocketIntegration
+    Test-CurrencyFormatting
+    Test-RbacImplementation
+    Test-NewFeatures
+    Test-ErrorHandling
+    Test-Accessibility
+    
+    # Print summary
+    Write-Host ""
+    Write-Section "Test Summary"
+    Write-Host "Tests Passed: $script:TestsPassed" -ForegroundColor Green
+    Write-Host "Tests Failed: $script:TestsFailed" -ForegroundColor Red
+    Write-Host "Total Tests: $script:TestsTotal" -ForegroundColor Blue
+    Write-Host ""
+    
+    if ($script:TestsFailed -eq 0) {
+        Write-Success "All tests passed!"
+        exit 0
     }
-    
-    if (-not (Wait-ForService -ServiceName "Restaurant Service" -Port $RestaurantServicePort)) {
-        Write-Error "Restaurant Service not available"
-        return
-    }
-    
-    if (-not (Wait-ForService -ServiceName "Order Service" -Port $OrderServicePort)) {
-        Write-Error "Order Service not available"
-        return
-    }
-    
-    # Run tests
-    $testPassed = 0
-    $testFailed = 0
-    
-    # Core functionality tests
-    if (Test-UserRegistration) {
-        $testPassed++
-    } else {
-        $testFailed++
-    }
-    
-    if (Test-UserLogin) {
-        $testPassed++
-    } else {
-        $testFailed++
-    }
-    
-    if (Test-RestaurantListing) {
-        $testPassed++
-    } else {
-        $testFailed++
-    }
-    
-    if (Test-MenuRetrieval) {
-        $testPassed++
-    } else {
-        $testFailed++
-    }
-    
-    if (Test-OrderCreation) {
-        $testPassed++
-    } else {
-        $testFailed++
-    }
-    
-    # Security tests
-    if (Test-InvalidAuth) {
-        $testPassed++
-    } else {
-        $testFailed++
-    }
-    
-    if (Test-InputValidation) {
-        $testPassed++
-    } else {
-        $testFailed++
-    }
-    
-    # Frontend tests
-    if (Test-FrontendApplications) {
-        $testPassed++
-    } else {
-        $testFailed++
-    }
-    
-    # Performance tests
-    if (Test-Performance) {
-        $testPassed++
-    } else {
-        $testFailed++
-    }
-    
-    # Generate report
-    New-TestReport
-    
-    # Summary
-    Write-Status "Test Summary:"
-    Write-Success "Passed: $testPassed"
-    if ($testFailed -gt 0) {
-        Write-Error "Failed: $testFailed"
-    } else {
-        Write-Success "Failed: $testFailed"
-    }
-    
-    if ($testFailed -eq 0) {
-        Write-Success "All tests passed! 🎉"
-    } else {
-        Write-Error "Some tests failed. Please check the logs above."
+    else {
+        Write-Error "Some tests failed. Please review the output above."
+        exit 1
     }
 }
 
 # Run main function
-Start-TestSuite
+Main

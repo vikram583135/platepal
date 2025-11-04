@@ -82,4 +82,104 @@ export class OrdersService {
 
     return result;
   }
+
+  async updateStatus(orderId: number, status: string): Promise<Order> {
+    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    order.status = status;
+    const updatedOrder = await this.orderRepository.save(order);
+
+    // Send real-time status update
+    this.ordersGateway.sendOrderStatusUpdate(
+      updatedOrder.id,
+      updatedOrder.restaurantId,
+      updatedOrder.customerId,
+      status,
+      updatedOrder
+    );
+
+    return updatedOrder;
+  }
+
+  async assignDelivery(orderId: number, deliveryPartnerId: string): Promise<Order> {
+    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Update order status to out_for_delivery
+    order.status = 'out_for_delivery';
+    const updatedOrder = await this.orderRepository.save(order);
+
+    // Send real-time delivery assignment notification
+    this.ordersGateway.sendDeliveryAssigned(
+      updatedOrder.id,
+      updatedOrder.restaurantId,
+      updatedOrder.customerId,
+      deliveryPartnerId,
+      updatedOrder
+    );
+
+    return updatedOrder;
+  }
+
+  async markPickedUp(orderId: number, deliveryPartnerId: string): Promise<Order> {
+    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    // Send real-time pickup notification
+    this.ordersGateway.sendDeliveryPickedUp(
+      order.id,
+      order.restaurantId,
+      order.customerId,
+      deliveryPartnerId
+    );
+
+    return order;
+  }
+
+  async markDelivered(orderId: number, deliveryPartnerId: string): Promise<Order> {
+    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    order.status = 'delivered';
+    const updatedOrder = await this.orderRepository.save(order);
+
+    // Send real-time delivery notification
+    this.ordersGateway.sendDeliveryDelivered(
+      updatedOrder.id,
+      updatedOrder.restaurantId,
+      updatedOrder.customerId,
+      deliveryPartnerId
+    );
+
+    return updatedOrder;
+  }
+
+  async cancelOrder(orderId: number, reason?: string): Promise<Order> {
+    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    order.status = 'cancelled';
+    const updatedOrder = await this.orderRepository.save(order);
+
+    // Send real-time cancellation notification
+    this.ordersGateway.sendOrderCancelled(
+      updatedOrder.id,
+      updatedOrder.restaurantId,
+      updatedOrder.customerId,
+      reason
+    );
+
+    return updatedOrder;
+  }
 }

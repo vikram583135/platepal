@@ -1,279 +1,285 @@
-# PlatePal Quick Testing Guide
+# PlatePal - Quick Testing Guide
 
 ## 🚀 Quick Start Testing
 
 ### 1. Start All Services
+
 ```bash
-# Start the complete PlatePal platform
+# Using Docker
 docker-compose up -d
 
-# Verify all services are running
-docker-compose ps
+# Or locally
+# Start backend services (ports 3001, 3002, 3003)
+# Start frontend services (ports 3004, 3005, 3006, 3007)
 ```
 
-### 2. Seed Test Data
+### 2. Verify Services
+
 ```bash
-# Run the test data seeding script
-chmod +x seed-test-data.sh
-./seed-test-data.sh
-```
-
-### 3. Run Automated Tests
-```bash
-# Run the comprehensive test suite
-chmod +x test-suite.sh
-./test-suite.sh
-
-# Or on Windows PowerShell
-./test-suite.ps1
-```
-
-## 📱 Test All Applications
-
-### Customer Mobile App
-```bash
-cd CustomerApp
-npm install
-npm run android  # or npm run ios
-```
-
-**Test Credentials**: `john@example.com` / `password123`
-
-**Key Tests**:
-- [ ] Login/Register
-- [ ] Browse restaurants
-- [ ] Add items to cart
-- [ ] Place order
-- [ ] Track order in real-time
-
-### Restaurant Dashboard
-**URL**: http://localhost:3004
-
-**Test Credentials**: `tony@pizzapalace.com` / `password123`
-
-**Key Tests**:
-- [ ] Login to dashboard
-- [ ] Manage menu items
-- [ ] Process incoming orders
-- [ ] Update order status
-
-### Delivery Partner App
-```bash
-cd delivery-app/DeliveryApp
-npm install
-npm run android  # or npm run ios
-```
-
-**Test Credentials**: `driver1@delivery.com` / `password123`
-
-**Key Tests**:
-- [ ] Login to partner dashboard
-- [ ] Accept delivery tasks
-- [ ] Navigate to locations
-- [ ] Update delivery status
-
-### Admin Dashboard
-**URL**: http://localhost:3005
-
-**Test Credentials**: `admin@platepal.com` / `password123`
-
-**Key Tests**:
-- [ ] Login to admin panel
-- [ ] View system analytics
-- [ ] Manage users and restaurants
-- [ ] Monitor all orders
-
-## 🔧 Backend API Testing
-
-### Test User Service (Port 3001)
-```bash
-# Test user registration
-curl -X POST http://localhost:3001/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Test User","email":"test@example.com","password":"password123"}'
-
-# Test user login
-curl -X POST http://localhost:3001/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
-```
-
-### Test Restaurant Service (Port 3002)
-```bash
-# Get all restaurants
-curl http://localhost:3002/restaurants
-
-# Get restaurant menu
-curl http://localhost:3002/restaurants/1/menu
-```
-
-### Test Order Service (Port 3003)
-```bash
-# Create order (replace YOUR_JWT_TOKEN with actual token)
-curl -X POST http://localhost:3003/orders \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -d '{"items":[{"id":"item1","name":"Test Pizza","price":15.99,"quantity":1,"restaurantId":"1","restaurantName":"Test Restaurant"}],"total":15.99,"restaurantId":"1"}'
-```
-
-## 🧪 Test Scenarios
-
-### Complete Order Flow Test
-1. **Customer places order** via mobile app
-2. **Restaurant receives order** via web dashboard
-3. **Restaurant updates status** to "preparing"
-4. **Customer sees update** in real-time
-5. **Delivery partner accepts task** via mobile app
-6. **Delivery partner picks up order**
-7. **Delivery partner delivers order**
-8. **Customer receives confirmation**
-
-### Multi-User Test
-1. **Multiple customers** place orders simultaneously
-2. **Multiple restaurants** process orders
-3. **Multiple delivery partners** accept tasks
-4. **Verify real-time updates** for all users
-5. **Check data consistency** across all systems
-
-## 🔒 Security Testing
-
-### Authentication Tests
-```bash
-# Test invalid credentials
-curl -X POST http://localhost:3001/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"invalid@example.com","password":"wrongpassword"}'
-
-# Test protected endpoint without token
-curl http://localhost:3002/restaurants/1/menu
-
-# Test protected endpoint with invalid token
-curl -H "Authorization: Bearer invalid_token" http://localhost:3002/restaurants/1/menu
-```
-
-### Input Validation Tests
-```bash
-# Test SQL injection prevention
-curl -X POST http://localhost:3001/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com'\''; DROP TABLE users; --","password":"password123"}'
-
-# Test XSS prevention
-curl -X POST http://localhost:3001/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"<script>alert('\''xss'\'')</script>","email":"test@example.com","password":"password123"}'
-```
-
-## ⚡ Performance Testing
-
-### Response Time Tests
-```bash
-# Test API response times
-time curl http://localhost:3002/restaurants
-time curl http://localhost:3002/restaurants/1/menu
-```
-
-### Load Testing
-```bash
-# Install Artillery for load testing
-npm install -g artillery
-
-# Test user service
-artillery quick --count 100 --num 10 http://localhost:3001/auth/login
-
-# Test restaurant service
-artillery quick --count 100 --num 10 http://localhost:3002/restaurants
-```
-
-## 📊 Test Results
-
-### Expected Results
-- **All API endpoints** return correct status codes
-- **Authentication** works across all applications
-- **Real-time updates** function properly
-- **Data consistency** maintained across services
-- **Security measures** prevent common attacks
-- **Performance** meets acceptable standards
-
-### Common Issues
-- **Database connection** issues
-- **WebSocket connection** problems
-- **Token expiration** handling
-- **CORS** configuration
-- **Mobile app** build issues
-
-## 🆘 Troubleshooting
-
-### Services Not Starting
-```bash
-# Check Docker status
+# Check Docker services
 docker-compose ps
 
-# View service logs
-docker-compose logs user-service
-docker-compose logs restaurant-service
-docker-compose logs order-service
-
-# Restart services
-docker-compose restart
+# Or test endpoints
+curl http://localhost:3001/health
+curl http://localhost:3002/health
+curl http://localhost:3003/health
 ```
-
-### Database Issues
-```bash
-# Check database connections
-docker exec platepal-postgres psql -U platepal_user -d platepal_db -c "SELECT 1;"
-docker exec platepal-mongo mongosh --eval "db.runCommand({ping: 1})"
-
-# Reset databases
-docker-compose down -v
-docker-compose up -d
-```
-
-### Mobile App Issues
-```bash
-# Clear React Native cache
-cd CustomerApp && npx react-native start --reset-cache
-
-# Rebuild Android app
-cd android && ./gradlew clean && cd .. && npm run android
-```
-
-## 📋 Test Checklist Summary
-
-### ✅ Backend Services
-- [ ] User Service (authentication, registration)
-- [ ] Restaurant Service (restaurants, menus)
-- [ ] Order Service (orders, real-time updates)
-
-### ✅ Frontend Applications
-- [ ] Restaurant Dashboard (menu management, orders)
-- [ ] Admin Dashboard (analytics, user management)
-
-### ✅ Mobile Applications
-- [ ] Customer App (browsing, ordering, tracking)
-- [ ] Delivery App (tasks, navigation, status updates)
-
-### ✅ Integration Testing
-- [ ] Cross-platform data consistency
-- [ ] Real-time updates across all apps
-- [ ] Complete order workflow
-
-### ✅ Security Testing
-- [ ] Authentication and authorization
-- [ ] Input validation and sanitization
-- [ ] SQL injection and XSS prevention
-
-### ✅ Performance Testing
-- [ ] API response times
-- [ ] Concurrent user handling
-- [ ] Mobile app performance
 
 ---
 
-**Total Test Coverage**: 100+ test cases across all applications and services
+## ⚡ Quick Test Scenarios
 
-**Estimated Testing Time**: 2-4 hours for comprehensive testing
+### Scenario 1: Complete Order Flow (5 minutes)
 
-**Test Environment**: Local development with Docker containers
+1. **Customer Web** (`http://localhost:3006`)
+   - Login/Register
+   - Browse restaurants
+   - Add items to cart
+   - Apply promo code
+   - Place order
+   - Note order ID
 
-This quick testing guide provides essential testing procedures for validating all PlatePal platform features and functionalities.
+2. **Restaurant Dashboard** (`http://localhost:3004`)
+   - Login: `italian@platepal.com` / `italian123`
+   - See new order notification
+   - Accept order
+   - Update status: Preparing → Ready
+
+3. **Delivery Web** (`http://localhost:3007`)
+   - Login
+   - Accept delivery task
+   - Pickup: Capture photo
+   - Delivery: Capture photo + signature
+   - Mark as delivered
+
+4. **Customer Web**
+   - Check order status updated
+   - See delivery confirmation
+
+5. **Admin Dashboard** (`http://localhost:3005`)
+   - Login
+   - View order in orders list
+   - Check statistics updated
+
+**✅ Expected**: Order flows smoothly across all interfaces with real-time updates
+
+---
+
+### Scenario 2: WebSocket Real-time Updates (3 minutes)
+
+1. **Customer Web**
+   - Open Orders page
+   - Check "Live" badge appears
+   - Place an order
+
+2. **Restaurant Dashboard**
+   - Check "Live" indicator on Orders page
+   - Verify new order notification appears
+   - Check sound notification plays
+
+3. **Customer Web**
+   - Restaurant updates status
+   - Verify status updates automatically (no refresh)
+
+4. **Delivery Web**
+   - Check connection status
+   - Verify task assigned notification
+
+**✅ Expected**: Real-time updates without page refresh
+
+---
+
+### Scenario 3: Restaurant Dashboard Features (5 minutes)
+
+1. **Menu Management**
+   - View menu (DataTable with search)
+   - Add new menu item (INR pricing)
+   - Edit menu item
+   - Export to CSV
+
+2. **Staff Scheduling**
+   - Navigate to Staff → Schedule
+   - Create weekly schedule
+   - Assign shifts
+   - Edit schedule entries
+
+3. **Promotions**
+   - Create promotion (Discount/BOGO/Free Item)
+   - Set date range
+   - Activate promotion
+
+4. **Analytics**
+   - View analytics dashboard
+   - Filter by date range (7d, 30d, 90d, 1y)
+   - Export analytics to CSV
+
+**✅ Expected**: All features work with proper INR formatting
+
+---
+
+### Scenario 4: Delivery Web Features (3 minutes)
+
+1. **Availability Toggle**
+   - Toggle Available/Offline
+   - Verify state persists on refresh
+
+2. **Earnings Dashboard**
+   - Complete a delivery
+   - Navigate to Earnings page
+   - Verify earnings display (INR)
+   - Check breakdowns (today, weekly, monthly)
+
+3. **Photo & Signature**
+   - Accept delivery task
+   - Click "Capture Delivery Photo"
+   - Grant camera permission
+   - Capture and verify photo saved
+   - Click "Get Customer Signature"
+   - Draw signature and save
+   - Mark as delivered (requires both photo + signature)
+
+**✅ Expected**: All delivery features work with proper validation
+
+---
+
+### Scenario 5: Admin Dashboard Features (5 minutes)
+
+1. **Advanced Tables**
+   - Orders table: Search, sort, export
+   - Restaurants table: Filter, export
+   - Customers table: Search, export
+   - Delivery Partners table: Filter, export
+
+2. **Restaurant Approvals** (RBAC)
+   - Navigate to Approvals
+   - View pending restaurants
+   - Approve/Reject with notes
+
+3. **Support Tickets** (RBAC)
+   - Navigate to Tickets
+   - Create ticket
+   - Add messages
+   - Update status
+
+4. **Platform Analytics** (RBAC)
+   - Navigate to Analytics
+   - View charts (revenue, orders, users)
+   - Check different time periods
+
+**✅ Expected**: All features work with RBAC permissions
+
+---
+
+## 🔍 Quick Verification Checklist
+
+### All Interfaces
+- [ ] Services start successfully
+- [ ] Login works
+- [ ] WebSocket connects (Live badge)
+- [ ] Real-time updates work
+- [ ] INR currency displays correctly
+- [ ] Responsive design works
+
+### Customer Web
+- [ ] Restaurant search/filter works
+- [ ] Add to cart works
+- [ ] Promo code applies
+- [ ] Order placement works
+- [ ] Real-time tracking works
+
+### Restaurant Dashboard
+- [ ] Real-time order notifications
+- [ ] Menu CRUD operations
+- [ ] Staff scheduling works
+- [ ] Promotions work
+- [ ] Analytics display correctly
+
+### Delivery Web
+- [ ] Availability toggle works
+- [ ] Photo capture works
+- [ ] Signature capture works
+- [ ] Earnings display correctly
+- [ ] Task management works
+
+### Admin Dashboard
+- [ ] DataTables work (sort, search, export)
+- [ ] RBAC permissions enforced
+- [ ] Approvals workflow works
+- [ ] Support tickets work
+- [ ] Analytics display correctly
+
+---
+
+## 🐛 Quick Troubleshooting
+
+### WebSocket Not Connecting
+```bash
+# Check order service is running
+docker-compose ps order-service
+
+# Check nginx WebSocket config
+docker-compose exec nginx nginx -t
+
+# Check logs
+docker-compose logs order-service
+```
+
+### Services Not Starting
+```bash
+# Check Docker logs
+docker-compose logs
+
+# Restart services
+docker-compose restart
+
+# Rebuild if needed
+docker-compose up -d --build
+```
+
+### Database Connection Issues
+```bash
+# Check database containers
+docker-compose ps postgres_db mongo_db
+
+# Check connection strings in environment variables
+docker-compose config
+```
+
+---
+
+## 📊 Test Scripts
+
+### Automated Test Suite
+
+**PowerShell**:
+```powershell
+.\test-suite.ps1
+```
+
+**Bash**:
+```bash
+chmod +x test-suite.sh
+./test-suite.sh
+```
+
+---
+
+## 🎯 Critical Test Cases
+
+### Must Pass Before Production
+
+1. ✅ Complete order flow works end-to-end
+2. ✅ WebSocket real-time updates work
+3. ✅ All prices display in INR
+4. ✅ RBAC permissions enforced
+5. ✅ Photo + Signature required for delivery
+6. ✅ DataTables work (search, sort, export)
+7. ✅ Multi-stage Docker builds succeed
+8. ✅ Health checks pass
+9. ✅ Services communicate via Docker network
+10. ✅ WebSocket works through nginx proxy
+
+---
+
+*Last Updated: Phase 1-6 Complete*
+*Version: 2.0*

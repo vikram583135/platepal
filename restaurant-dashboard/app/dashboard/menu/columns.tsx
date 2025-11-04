@@ -16,6 +16,7 @@ import {
 import { MenuItem } from './types';
 import { EditItemDialog } from './edit-item-dialog';
 import { DeleteItemDialog } from './delete-item-dialog';
+import { formatINR } from '@/lib/currency';
 
 export const columns: ColumnDef<MenuItem>[] = [
   {
@@ -31,10 +32,7 @@ export const columns: ColumnDef<MenuItem>[] = [
     header: () => <div className="text-right">Price</div>,
     cell: ({ row }) => {
       const amount = parseFloat(row.getValue('price'));
-      const formatted = new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-      }).format(amount);
+      const formatted = formatINR(amount);
 
       return <div className="text-right font-medium">{formatted}</div>;
     },

@@ -1,6 +1,7 @@
 'use client';
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { formatINR } from '@/lib/currency';
 
 const data = [
   { name: 'Jan', revenue: 4000 },
@@ -19,24 +20,29 @@ const data = [
 
 export default function RevenueChart() {
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Revenue</h3>
+    <div className="bg-surface rounded-lg shadow-elevated p-6 animate-fade-in">
+      <h3 className="text-lg font-semibold text-text-primary mb-4">Monthly Revenue</h3>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
+            <CartesianGrid strokeDasharray="3 3" stroke="#D5DBDB" />
+            <XAxis dataKey="name" stroke="#7F8FA4" />
+            <YAxis stroke="#7F8FA4" />
             <Tooltip 
-              formatter={(value) => [`$${value}`, 'Revenue']}
+              formatter={(value: any) => [formatINR(value), 'Revenue']}
               labelFormatter={(label) => `Month: ${label}`}
+              contentStyle={{
+                backgroundColor: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+              }}
             />
             <Line 
               type="monotone" 
               dataKey="revenue" 
-              stroke="#3B82F6" 
+              stroke="#3498DB" 
               strokeWidth={2}
-              dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
+              dot={{ fill: '#3498DB', strokeWidth: 2, r: 4 }}
             />
           </LineChart>
         </ResponsiveContainer>

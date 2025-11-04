@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { RootState, AppDispatch } from '@/store/store';
 import { logout } from '@/store';
 import { 
@@ -14,7 +16,9 @@ import {
   CogIcon,
   ArrowRightOnRectangleIcon,
   Bars3Icon,
-  XMarkIcon
+  XMarkIcon,
+  ClipboardDocumentCheckIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
 
 interface DashboardLayoutProps {
@@ -23,29 +27,35 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname();
   const dispatch = useDispatch<AppDispatch>();
   const { adminUser } = useSelector((state: RootState) => state.auth);
 
   const navigation = [
-    { name: 'Dashboard', href: '#', icon: HomeIcon, current: true },
-    { name: 'Orders', href: '#', icon: ShoppingBagIcon, current: false },
-    { name: 'Restaurants', href: '#', icon: BuildingStorefrontIcon, current: false },
-    { name: 'Delivery Partners', href: '#', icon: TruckIcon, current: false },
-    { name: 'Customers', href: '#', icon: UsersIcon, current: false },
-    { name: 'Analytics', href: '#', icon: ChartBarIcon, current: false },
-    { name: 'Settings', href: '#', icon: CogIcon, current: false },
-  ];
+    { name: 'Dashboard', href: '/', icon: HomeIcon, color: 'from-blue-500 to-blue-600' },
+    { name: 'Restaurant Approvals', href: '/approvals', icon: ClipboardDocumentCheckIcon, color: 'from-amber-500 to-amber-600' },
+    { name: 'Orders', href: '/orders', icon: ShoppingBagIcon, color: 'from-green-500 to-green-600' },
+    { name: 'Restaurants', href: '/restaurants', icon: BuildingStorefrontIcon, color: 'from-purple-500 to-purple-600' },
+    { name: 'Delivery Partners', href: '/delivery-partners', icon: TruckIcon, color: 'from-orange-500 to-orange-600' },
+    { name: 'Customers', href: '/customers', icon: UsersIcon, color: 'from-pink-500 to-pink-600' },
+    { name: 'Support Tickets', href: '/tickets', icon: ChatBubbleLeftRightIcon, color: 'from-cyan-500 to-cyan-600' },
+    { name: 'Analytics', href: '/analytics', icon: ChartBarIcon, color: 'from-indigo-500 to-indigo-600' },
+    { name: 'Settings', href: '/settings', icon: CogIcon, color: 'from-gray-500 to-gray-600' },
+  ].map(item => ({
+    ...item,
+    current: pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href)),
+  }));
 
   const handleLogout = () => {
     dispatch(logout());
   };
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-100">
+    <div className="h-screen flex overflow-hidden bg-background">
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 flex z-40 md:hidden ${sidebarOpen ? '' : 'hidden'}`}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
-        <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white">
+        <div className="relative flex-1 flex flex-col max-w-xs w-full bg-primary shadow-floating">
           <div className="absolute top-0 right-0 -mr-12 pt-2">
             <button
               type="button"
@@ -57,41 +67,47 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
           <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
             <div className="flex-shrink-0 flex items-center px-4">
-              <h1 className="text-xl font-bold text-gray-900">PlatePal Admin</h1>
+              <h1 className="text-xl font-bold text-white">PlatePal Admin</h1>
             </div>
-            <nav className="mt-5 px-2 space-y-1">
-              {navigation.map((item) => (
-                <a
-                  key={item.name}
-                  href={item.href}
-                  className={`${
-                    item.current
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  } group flex items-center px-2 py-2 text-base font-medium rounded-md`}
-                >
-                  <item.icon
+              <nav className="mt-5 px-2 space-y-1">
+                {navigation.map((item) => (
+                  <Link
+                    key={item.name}
+                    href={item.href}
                     className={`${
-                      item.current ? 'text-gray-500' : 'text-gray-400 group-hover:text-gray-500'
-                    } mr-4 h-6 w-6`}
-                  />
-                  {item.name}
-                </a>
-              ))}
-            </nav>
+                      item.current
+                        ? 'bg-primary-light bg-opacity-20 text-white shadow-md'
+                        : 'text-primary-light hover:bg-primary-light hover:bg-opacity-10 hover:text-white'
+                    } group flex items-center px-3 py-2.5 text-base font-medium rounded-lg transition-all duration-200 relative overflow-hidden`}
+                  >
+                    {item.current && (
+                      <div className={`absolute inset-0 bg-gradient-to-r ${item.color} opacity-10`} />
+                    )}
+                    <item.icon
+                      className={`${
+                        item.current ? 'text-white' : 'text-primary-light group-hover:text-white'
+                      } mr-4 h-6 w-6 relative z-10 transition-transform group-hover:scale-110`}
+                    />
+                    <span className="relative z-10">{item.name}</span>
+                    {item.current && (
+                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-white rounded-l-full" />
+                    )}
+                  </Link>
+                ))}
+              </nav>
           </div>
-          <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
+          <div className="flex-shrink-0 flex border-t border-primary-light border-opacity-20 p-4">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
+                <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center">
                   <span className="text-sm font-medium text-white">
                     {adminUser?.name?.charAt(0).toUpperCase()}
                   </span>
                 </div>
               </div>
               <div className="ml-3">
-                <p className="text-base font-medium text-gray-700">{adminUser?.name}</p>
-                <p className="text-sm font-medium text-gray-500">{adminUser?.email}</p>
+                <p className="text-base font-medium text-white">{adminUser?.name}</p>
+                <p className="text-sm font-medium text-primary-light">{adminUser?.email}</p>
               </div>
             </div>
           </div>
@@ -101,48 +117,55 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Desktop sidebar */}
       <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64">
-          <div className="flex flex-col h-0 flex-1">
+          <div className="flex flex-col h-0 flex-1 gradient-primary shadow-elevated">
             <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
               <div className="flex items-center flex-shrink-0 px-4">
-                <h1 className="text-xl font-bold text-gray-900">PlatePal Admin</h1>
+                <h1 className="text-xl font-bold text-white">PlatePal Admin</h1>
               </div>
-              <nav className="mt-5 flex-1 px-2 bg-white space-y-1">
-                {navigation.map((item) => (
-                  <a
+              <nav className="mt-5 flex-1 px-2 space-y-1">
+                {navigation.map((item, index) => (
+                  <Link
                     key={item.name}
                     href={item.href}
                     className={`${
                       item.current
-                        ? 'bg-gray-100 text-gray-900'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
+                        ? 'bg-primary-light bg-opacity-20 text-white shadow-md'
+                        : 'text-primary-light hover:bg-primary-light hover:bg-opacity-10 hover:text-white'
+                    } group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 relative overflow-hidden animate-slide-up`}
+                    style={{ animationDelay: `${index * 50}ms` }}
                   >
+                    {item.current && (
+                      <div className={`absolute inset-0 bg-gradient-to-r ${item.color} opacity-10`} />
+                    )}
                     <item.icon
                       className={`${
-                        item.current ? 'text-gray-500' : 'text-gray-400 group-hover:text-gray-500'
-                      } mr-3 h-6 w-6`}
+                        item.current ? 'text-white' : 'text-primary-light group-hover:text-white'
+                      } mr-3 h-5 w-5 relative z-10 transition-transform group-hover:scale-110`}
                     />
-                    {item.name}
-                  </a>
+                    <span className="relative z-10">{item.name}</span>
+                    {item.current && (
+                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-white rounded-l-full" />
+                    )}
+                  </Link>
                 ))}
               </nav>
             </div>
-            <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
+            <div className="flex-shrink-0 flex border-t border-primary-light border-opacity-20 p-4">
               <div className="flex items-center w-full">
                 <div className="flex-shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
+                  <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center shadow-md">
                     <span className="text-sm font-medium text-white">
                       {adminUser?.name?.charAt(0).toUpperCase()}
                     </span>
                   </div>
                 </div>
                 <div className="ml-3 flex-1">
-                  <p className="text-sm font-medium text-gray-700">{adminUser?.name}</p>
-                  <p className="text-xs font-medium text-gray-500">{adminUser?.email}</p>
+                  <p className="text-sm font-medium text-white">{adminUser?.name}</p>
+                  <p className="text-xs font-medium text-primary-light">{adminUser?.email}</p>
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="ml-2 p-1 rounded-md text-gray-400 hover:text-gray-600"
+                  className="ml-2 p-1 rounded-md text-primary-light hover:text-white transition-colors"
                 >
                   <ArrowRightOnRectangleIcon className="h-5 w-5" />
                 </button>
@@ -157,7 +180,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3">
           <button
             type="button"
-            className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+            className="-ml-0.5 -mt-0.5 h-12 w-12 inline-flex items-center justify-center rounded-md text-text-secondary hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
             onClick={() => setSidebarOpen(true)}
           >
             <Bars3Icon className="h-6 w-6" />

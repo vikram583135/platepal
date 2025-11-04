@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import withAuth from '@/app/components/withAuth';
 import { getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem } from '@/app/services/restaurant.service';
+import { formatINR } from '@/lib/currency';
 
 // --- TYPES ---
 type MenuItem = {
@@ -195,7 +196,7 @@ function MenuPage() {
                     <TableCell className="font-medium">{item.name}</TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell className="hidden md:table-cell">{item.description}</TableCell>
-                    <TableCell className="text-right">${(item.price || 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{formatINR(item.price || 0)}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
