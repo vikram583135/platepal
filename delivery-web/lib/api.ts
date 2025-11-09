@@ -55,6 +55,80 @@ class ApiService {
     );
     return response.data;
   }
+
+  // Route Optimization endpoints
+  async getAvailableBatches(
+    lat: number,
+    lng: number,
+    maxBatchSize: number = 3,
+    token: string
+  ) {
+    const response = await axios.get(
+      `${API_BASE_URL}/route-optimization/available-batches?lat=${lat}&lng=${lng}&maxBatchSize=${maxBatchSize}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  }
+
+  async optimizeRoute(batchId: string, lat: number, lng: number, token: string) {
+    const response = await axios.post(
+      `${API_BASE_URL}/route-optimization/optimize-route`,
+      { batchId, lat, lng },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  }
+
+  // Earnings Prediction endpoints
+  async getEarningsPrediction(
+    partnerId: string,
+    hours: number = 2,
+    area?: string,
+    token?: string
+  ) {
+    const headers: any = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const response = await axios.get(
+      `${API_BASE_URL}/earnings-prediction/${partnerId}?hours=${hours}${area ? `&area=${area}` : ''}`,
+      { headers }
+    );
+    return response.data;
+  }
+
+  // Smart Notifications endpoints
+  async getSmartNotifications(orderId: string, token: string) {
+    const response = await axios.get(
+      `${API_BASE_URL}/notifications/smart/${orderId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  }
+
+  async getProactiveNotifications(partnerId: string, token: string) {
+    const response = await axios.get(
+      `${API_BASE_URL}/notifications/proactive/${partnerId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  }
 }
 
 export const apiService = new ApiService();

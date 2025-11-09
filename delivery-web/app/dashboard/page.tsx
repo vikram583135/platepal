@@ -3,13 +3,15 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiService, Order } from '@/lib/api';
-import { useAuthStore, useTaskStore, DeliveryTask } from '@/lib/store';
+import { useAuthStore, useTaskStore, DeliveryTask, useAvailabilityStore, useEarningsStore, useSmartNotificationsStore } from '@/lib/store';
 import TaskCard from '@/components/TaskCard';
 import { LogOut, RefreshCw, Package, DollarSign, TrendingUp, TrendingDown, ArrowRight, Search, Wifi, WifiOff, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { initWebSocket, getWebSocketClient, DeliveryEvent } from '@/lib/websocket';
 import AvailabilityToggle from '@/components/AvailabilityToggle';
-import { useAvailabilityStore, useEarningsStore } from '@/lib/store';
+import EarningsPredictor from '@/components/EarningsPredictor';
+import SmartNotification from '@/components/SmartNotification';
+import OrderBatchCard from '@/components/OrderBatchCard';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -17,11 +19,86 @@ export default function DashboardPage() {
   const { currentTask, setCurrentTask, availableTasks, setAvailableTasks, addAvailableTask, removeAvailableTask } = useTaskStore();
   const { isAvailable } = useAvailabilityStore();
   const { totalEarnings, todayEarnings, completedDeliveries } = useEarningsStore();
+  const { smartNotifications, removeNotification } = useSmartNotificationsStore();
   const [loading, setLoading] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [showBatches, setShowBatches] = useState(false);
+  const [availableBatches, setAvailableBatches] = useState<any[]>([]);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [partnerLocation, setPartnerLocation] = useState<{ lat: number; lng: number } | null>(null);
   const touchStartY = useRef<number>(0);
+
+  // Get partner location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setPartnerLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error('Location error:', error);
+          // Default to a mock location
+          setPartnerLocation({ lat: 28.6139, lng: 77.2090 });
+        }
+      );
+    } else {
+      // Default to a mock location
+      setPartnerLocation({ lat: 28.6139, lng: 77.2090 });
+    }
+  }, []);
+
+  const mapOrderToTask = (order: Order): DeliveryTask => ({
+    id: order.id,
+    orderId: order.id,
+    restaurantName: order.items[0]?.restaurantName || 'Restaurant',
+    customerName: 'Customer',
+    pickupAddress: 'Restaurant Address',
+    deliveryAddress: 'Customer Address',
+    status: order.status,
+    items: order.items,
+    total: order.total,
+    createdAt: order.createdAt,
+  });
+
+  const loadBatches = useCallback(async () => {
+    if (!token || !partnerLocation) return;
+
+    setLoadingBatches(true);
+    try {
+      const response = await apiService.getAvailableBatches(
+        partnerLocation.lat,
+        partnerLocation.lng,
+        3,
+        token
+      );
+      
+      if (response.success && response.batches) {
+        // Map backend batch format to frontend format
+        const mappedBatches = response.batches.map((batch: any) => ({
+          ...batch,
+          orders: batch.orders.map((order: any) => mapOrderToTask(order)),
+        }));
+        setAvailableBatches(mappedBatches);
+      }
+    } catch (error) {
+      console.error('Failed to load batches:', error);
+      toast.error('Failed to load batch offers');
+    } finally {
+      setLoadingBatches(false);
+    }
+  }, [token, partnerLocation]);
+
+  // Load batches when location is available
+  useEffect(() => {
+    if (partnerLocation && isAvailable && token) {
+      loadBatches();
+    }
+  }, [partnerLocation, isAvailable, token, loadBatches]);
 
   useEffect(() => {
     if (!token) {
@@ -122,18 +199,28 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshing]);
 
-  const mapOrderToTask = (order: Order): DeliveryTask => ({
-    id: order.id,
-    orderId: order.id,
-    restaurantName: order.items[0]?.restaurantName || 'Restaurant',
-    customerName: 'Customer',
-    pickupAddress: 'Restaurant Address',
-    deliveryAddress: 'Customer Address',
-    status: order.status,
-    items: order.items,
-    total: order.total,
-    createdAt: order.createdAt,
-  });
+  const handleAcceptBatch = async (batch: any) => {
+    if (!token) return;
+
+    try {
+      // Accept all orders in the batch
+      for (const task of batch.orders) {
+        await apiService.updateOrderStatus(task.orderId, 'accepted', token);
+      }
+      
+      // Set first order as current task
+      if (batch.orders.length > 0) {
+        setCurrentTask(batch.orders[0]);
+        router.push('/active');
+      }
+      
+      toast.success(`Batch accepted! ${batch.orders.length} orders added.`, {
+        icon: '✅',
+      });
+    } catch (error) {
+      toast.error('Failed to accept batch');
+    }
+  };
 
   const handleAcceptTask = async (task: DeliveryTask) => {
     if (!token) return;
@@ -253,6 +340,31 @@ export default function DashboardPage() {
 
       {/* Content */}
       <div className="p-4 space-y-6">
+        {/* Smart Notifications */}
+        {smartNotifications.length > 0 && (
+          <div className="space-y-3 animate-fade-in-up">
+            {smartNotifications
+              .filter(n => n.priority === 'high')
+              .slice(0, 3)
+              .map((notification) => (
+                <SmartNotification
+                  key={notification.id}
+                  notification={notification}
+                  onDismiss={removeNotification}
+                />
+              ))}
+          </div>
+        )}
+
+        {/* Earnings Predictor */}
+        {isAvailable && deliveryPartner && (
+          <EarningsPredictor 
+            partnerId={deliveryPartner.id} 
+            hours={2}
+            className="animate-fade-in-up"
+          />
+        )}
+
         {/* Availability Toggle */}
         <div className="bg-neutral-surface rounded-lg p-5 shadow-elevated animate-slide-up">
           <div className="flex items-center justify-between mb-4">
@@ -321,15 +433,33 @@ export default function DashboardPage() {
           <ArrowRight size={24} className="text-primary" />
         </button>
 
-        {/* Enhanced Available Tasks Section */}
+        {/* Enhanced Available Tasks/Batches Section */}
         <div className="animate-fade-in-up animate-stagger-3">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-neutral-text-primary">Available Tasks</h2>
-            {availableTasks.length > 0 && (
-              <span className="text-sm text-neutral-text-secondary bg-primary-light/30 px-3 py-1 rounded-full font-semibold">
-                {filteredTasks.length} {filteredTasks.length === 1 ? 'task' : 'tasks'}
-              </span>
-            )}
+            <h2 className="text-2xl font-bold text-neutral-text-primary">
+              {showBatches ? 'Batch Offers' : 'Available Tasks'}
+            </h2>
+            <div className="flex items-center gap-3">
+              {!showBatches && availableTasks.length > 0 && (
+                <span className="text-sm text-neutral-text-secondary bg-primary-light/30 px-3 py-1 rounded-full font-semibold">
+                  {filteredTasks.length} {filteredTasks.length === 1 ? 'task' : 'tasks'}
+                </span>
+              )}
+              {showBatches && availableBatches.length > 0 && (
+                <span className="text-sm text-neutral-text-secondary bg-primary-light/30 px-3 py-1 rounded-full font-semibold">
+                  {availableBatches.length} {availableBatches.length === 1 ? 'batch' : 'batches'}
+                </span>
+              )}
+              {isAvailable && partnerLocation && (
+                <button
+                  onClick={() => setShowBatches(!showBatches)}
+                  className="text-sm font-semibold text-primary hover:underline px-3 py-1 rounded-full bg-primary-light/20 hover:bg-primary-light/30 transition-colors"
+                  aria-label={showBatches ? 'Show individual tasks' : 'Show batch offers'}
+                >
+                  {showBatches ? 'Show Tasks' : 'Show Batches'}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Search Bar */}
@@ -351,55 +481,94 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {loading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-neutral-surface rounded-xl p-5 shadow-elevated skeleton animate-pulse" style={{ height: '180px' }}>
-                  <div className="h-4 bg-neutral-border/50 rounded w-3/4 mb-3" />
-                  <div className="h-3 bg-neutral-border/50 rounded w-1/2 mb-4" />
-                  <div className="space-y-2">
-                    <div className="h-3 bg-neutral-border/50 rounded" />
-                    <div className="h-3 bg-neutral-border/50 rounded w-5/6" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : filteredTasks.length === 0 ? (
-            <div className="text-center py-16 animate-fade-in bg-neutral-surface rounded-xl border-2 border-dashed border-neutral-border">
-              <div className="w-24 h-24 bg-neutral-background rounded-full flex items-center justify-center mx-auto mb-4">
-                <Package size={48} className="text-neutral-text-secondary" />
+          {showBatches ? (
+            // Show batches
+            loadingBatches ? (
+              <div className="space-y-4">
+                {[1, 2].map((i) => (
+                  <div key={i} className="bg-neutral-surface rounded-xl p-5 shadow-elevated skeleton animate-pulse" style={{ height: '200px' }} />
+                ))}
               </div>
-              <h3 className="text-xl font-bold text-neutral-text-primary mb-2">
-                {searchQuery ? 'No matching tasks' : 'No tasks available'}
-              </h3>
-              <p className="text-neutral-text-secondary">
-                {searchQuery ? 'Try adjusting your search' : 'New delivery tasks will appear here'}
-              </p>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="mt-4 text-primary font-semibold hover:underline focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded px-2 py-1"
-                  aria-label="Clear search"
-                >
-                  Clear search
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredTasks.map((task, index) => (
-                <div 
-                  key={task.id} 
-                  className="animate-fade-in-up animate-stagger-1"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <TaskCard
-                    task={task}
-                    onAccept={handleAcceptTask}
-                  />
+            ) : availableBatches.length === 0 ? (
+              <div className="text-center py-16 animate-fade-in bg-neutral-surface rounded-xl border-2 border-dashed border-neutral-border">
+                <div className="w-24 h-24 bg-neutral-background rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Package size={48} className="text-neutral-text-secondary" />
                 </div>
-              ))}
-            </div>
+                <h3 className="text-xl font-bold text-neutral-text-primary mb-2">
+                  No batch offers available
+                </h3>
+                <p className="text-neutral-text-secondary">
+                  Batch offers will appear when compatible orders are available
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {availableBatches.map((batch, index) => (
+                  <div 
+                    key={`batch-${index}`}
+                    className="animate-fade-in-up animate-stagger-1"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <OrderBatchCard
+                      batch={batch}
+                      onAccept={handleAcceptBatch}
+                    />
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+            // Show individual tasks
+            loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="bg-neutral-surface rounded-xl p-5 shadow-elevated skeleton animate-pulse" style={{ height: '180px' }}>
+                    <div className="h-4 bg-neutral-border/50 rounded w-3/4 mb-3" />
+                    <div className="h-3 bg-neutral-border/50 rounded w-1/2 mb-4" />
+                    <div className="space-y-2">
+                      <div className="h-3 bg-neutral-border/50 rounded" />
+                      <div className="h-3 bg-neutral-border/50 rounded w-5/6" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredTasks.length === 0 ? (
+              <div className="text-center py-16 animate-fade-in bg-neutral-surface rounded-xl border-2 border-dashed border-neutral-border">
+                <div className="w-24 h-24 bg-neutral-background rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Package size={48} className="text-neutral-text-secondary" />
+                </div>
+                <h3 className="text-xl font-bold text-neutral-text-primary mb-2">
+                  {searchQuery ? 'No matching tasks' : 'No tasks available'}
+                </h3>
+                <p className="text-neutral-text-secondary">
+                  {searchQuery ? 'Try adjusting your search' : 'New delivery tasks will appear here'}
+                </p>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="mt-4 text-primary font-semibold hover:underline focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded px-2 py-1"
+                    aria-label="Clear search"
+                  >
+                    Clear search
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredTasks.map((task, index) => (
+                  <div 
+                    key={task.id} 
+                    className="animate-fade-in-up animate-stagger-1"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <TaskCard
+                      task={task}
+                      onAccept={handleAcceptTask}
+                    />
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>

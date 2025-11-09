@@ -7,7 +7,11 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci && \
+# Increase timeout and add retry logic for network resilience
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm ci && \
     npm cache clean --force
 
 # Build stage
@@ -32,6 +36,7 @@ ARG NEXT_PUBLIC_API_URL=/api/restaurants
 ARG NEXT_PUBLIC_AUTH_URL=/api/auth
 ARG NEXT_PUBLIC_ORDER_URL=/api/orders
 ARG NEXT_PUBLIC_WS_URL=ws://localhost/socket.io
+ARG NEXT_PUBLIC_GEMINI_API_KEY
 
 # Set as ENV so they're available during build
 ENV NEXT_PUBLIC_USE_NGINX_PROXY=${NEXT_PUBLIC_USE_NGINX_PROXY}
@@ -39,6 +44,7 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_AUTH_URL=${NEXT_PUBLIC_AUTH_URL}
 ENV NEXT_PUBLIC_ORDER_URL=${NEXT_PUBLIC_ORDER_URL}
 ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
+ENV NEXT_PUBLIC_GEMINI_API_KEY=${NEXT_PUBLIC_GEMINI_API_KEY}
 
 # Build the application
 RUN npm run build

@@ -4,6 +4,9 @@ import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 // 1. Import the new OrdersModule
 import { OrdersModule } from './orders/orders.module';
+import { RouteOptimizationModule } from './route-optimization/route-optimization.module';
+import { EarningsPredictionModule } from './earnings-prediction/earnings-prediction.module';
+import { NotificationIntelligenceModule } from './notification-intelligence/notification-intelligence.module';
 
 @Module({
   imports: [
@@ -19,6 +22,9 @@ import { OrdersModule } from './orders/orders.module';
     }),
     // 2. Add OrdersModule to the application's imports
     OrdersModule,
+    RouteOptimizationModule,
+    EarningsPredictionModule,
+    NotificationIntelligenceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

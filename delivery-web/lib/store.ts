@@ -14,6 +14,26 @@ export interface DeliveryTask {
   createdAt: string;
 }
 
+export type MissionState = 'navigate' | 'pickup' | 'delivery';
+
+export interface SmartNotification {
+  id: string;
+  type: 'info' | 'warning' | 'success' | 'error';
+  priority: 'high' | 'medium' | 'low';
+  message: string;
+  action?: string;
+  timestamp: Date;
+  orderId?: string;
+}
+
+export interface EarningsPrediction {
+  predictedEarnings: number;
+  confidence: number;
+  factors: string[];
+  hours: number;
+  area?: string;
+}
+
 interface AuthState {
   token: string | null;
   deliveryPartner: any | null;
@@ -110,4 +130,93 @@ export const useEarningsStore = create<EarningsState>()(
     }
   )
 );
+
+interface MissionStateStore {
+  missionState: MissionState | null;
+  setMissionState: (state: MissionState | null) => void;
+}
+
+interface VoiceAssistantStore {
+  voiceAssistantEnabled: boolean;
+  isListening: boolean;
+  lastCommand: string | null;
+  setVoiceAssistantEnabled: (enabled: boolean) => void;
+  setIsListening: (listening: boolean) => void;
+  setLastCommand: (command: string | null) => void;
+}
+
+interface MapModeStore {
+  mapMode: boolean;
+  setMapMode: (enabled: boolean) => void;
+}
+
+interface EarningsPredictionStore {
+  earningsPrediction: EarningsPrediction | null;
+  setEarningsPrediction: (prediction: EarningsPrediction | null) => void;
+}
+
+interface SmartNotificationsStore {
+  smartNotifications: SmartNotification[];
+  addNotification: (notification: SmartNotification) => void;
+  removeNotification: (id: string) => void;
+  clearNotifications: () => void;
+}
+
+export const useMissionStateStore = create<MissionStateStore>()(
+  persist(
+    (set) => ({
+      missionState: null,
+      setMissionState: (state) => set({ missionState: state }),
+    }),
+    {
+      name: 'delivery-mission-state',
+    }
+  )
+);
+
+export const useVoiceAssistantStore = create<VoiceAssistantStore>()(
+  persist(
+    (set) => ({
+      voiceAssistantEnabled: false,
+      isListening: false,
+      lastCommand: null,
+      setVoiceAssistantEnabled: (enabled) => set({ voiceAssistantEnabled: enabled }),
+      setIsListening: (listening) => set({ isListening: listening }),
+      setLastCommand: (command) => set({ lastCommand: command }),
+    }),
+    {
+      name: 'delivery-voice-assistant',
+    }
+  )
+);
+
+export const useMapModeStore = create<MapModeStore>()(
+  persist(
+    (set) => ({
+      mapMode: false,
+      setMapMode: (enabled) => set({ mapMode: enabled }),
+    }),
+    {
+      name: 'delivery-map-mode',
+    }
+  )
+);
+
+export const useEarningsPredictionStore = create<EarningsPredictionStore>()((set) => ({
+  earningsPrediction: null,
+  setEarningsPrediction: (prediction) => set({ earningsPrediction: prediction }),
+}));
+
+export const useSmartNotificationsStore = create<SmartNotificationsStore>()((set) => ({
+  smartNotifications: [],
+  addNotification: (notification) =>
+    set((state) => ({
+      smartNotifications: [notification, ...state.smartNotifications].slice(0, 10), // Keep last 10
+    })),
+  removeNotification: (id) =>
+    set((state) => ({
+      smartNotifications: state.smartNotifications.filter((n) => n.id !== id),
+    })),
+  clearNotifications: () => set({ smartNotifications: [] }),
+}));
 

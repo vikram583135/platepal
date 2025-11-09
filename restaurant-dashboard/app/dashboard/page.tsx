@@ -7,6 +7,7 @@ import { RefreshCw, Download, Calendar } from 'lucide-react';
 import StatsCards from '@/app/components/StatsCards';
 import AdvancedCharts from '@/app/components/AdvancedCharts';
 import TopItems from '@/app/components/TopItems';
+import AICoPilotSummary from '@/app/components/AICoPilotSummary';
 import { DashboardSkeleton } from '@/app/components/LoadingStates';
 import { toast } from 'sonner';
 
@@ -172,6 +173,12 @@ function DashboardPage() {
             <span>Refresh</span>
           </button>
         </div>
+      </div>
+
+      {/* AI Co-Pilot Summary */}
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-text-primary mb-4">AI Co-Pilot Insights</h2>
+        <AICoPilotSummary />
       </div>
 
       {/* Stats Cards */}

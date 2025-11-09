@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { TableSkeleton } from '@/app/components/LoadingStates';
 import withAuth from '@/app/components/withAuth';
 import { initWebSocket, getWebSocketClient, disconnectWebSocket, type OrderEventType } from '@/lib/websocket';
+import OrderKanbanBoard from '@/app/components/OrderKanbanBoard';
 
 // --- TYPES ---
 type OrderItem = { id: string; name: string; quantity: number; price: number };
@@ -54,6 +55,7 @@ function OrdersPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [newOrderNotification, setNewOrderNotification] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('kanban');
   const wsInitialized = useRef(false);
   
   // Filters
@@ -168,8 +170,8 @@ function OrdersPage() {
     },
   });
 
-  const handleStatusChange = (orderId: string, status: Order['status']) => {
-    mutation.mutate({ orderId, status });
+  const handleStatusChange = (orderId: string, status: string) => {
+    mutation.mutate({ orderId, status: status as Order['status'] });
   };
 
   // Filter orders
@@ -484,7 +486,7 @@ function OrdersPage() {
         </div>
       )}
 
-      {/* Orders Table */}
+      {/* Orders View */}
       {isLoading ? (
         <TableSkeleton rows={10} />
       ) : isError ? (
@@ -509,6 +511,11 @@ function OrdersPage() {
             {orders.length === 0 ? 'Your orders will appear here once customers start ordering' : 'Try adjusting your search criteria'}
           </p>
         </div>
+      ) : viewMode === 'kanban' ? (
+        <OrderKanbanBoard 
+          orders={filteredOrders} 
+          onStatusUpdate={handleStatusChange}
+        />
       ) : (
         <div className="bg-surface rounded-lg shadow-soft overflow-hidden">
           <div className="overflow-x-auto">

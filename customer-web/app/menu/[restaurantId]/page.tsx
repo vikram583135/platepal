@@ -7,6 +7,7 @@ import { useCartStore } from '@/lib/store';
 import MenuItemCard from '@/components/MenuItemCard';
 import { SkeletonMenuCard } from '@/components/SkeletonCard';
 import EmptyState from '@/components/EmptyState';
+import IntelligentDietaryFilter, { DietaryFilters } from '@/components/IntelligentDietaryFilter';
 import { ArrowLeft, ShoppingCart, Search, Star, Clock, UtensilsCrossed } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
@@ -22,6 +23,12 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [dietaryFilters, setDietaryFilters] = useState<DietaryFilters>({
+    dietaryRestrictions: [],
+    allergens: [],
+    preferences: [],
+    complexRequirements: [],
+  });
   
   const { addItem, items } = useCartStore();
   const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -92,7 +99,11 @@ export default function MenuPage() {
     const matchesSearch = searchQuery === '' || 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    
+    // Apply dietary filters (mock - would need actual dietary data on items)
+    const matchesDietary = true; // Placeholder - implement based on item dietary attributes
+    
+    return matchesCategory && matchesSearch && matchesDietary;
   });
 
   if (!loading && !restaurant) {
@@ -191,6 +202,13 @@ export default function MenuPage() {
                 className="w-full pl-10 pr-4 py-2 border-2 border-neutral-border rounded-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all text-sm"
               />
             </div>
+          </div>
+        )}
+
+        {/* Intelligent Dietary Filter */}
+        {!loading && (
+          <div className="px-4 pb-4">
+            <IntelligentDietaryFilter onFilterChange={setDietaryFilters} />
           </div>
         )}
 

@@ -13,6 +13,8 @@ import RestaurantsTable from '@/components/RestaurantsTable';
 import DeliveryPartnersTable from '@/components/DeliveryPartnersTable';
 import CustomersTable from '@/components/CustomersTable';
 import RevenueChart from '@/components/RevenueChart';
+import HealthScoreWidget from '@/components/HealthScoreWidget';
+import AnomalyAlerts from '@/components/AnomalyAlerts';
 import { CardSkeleton, TableSkeleton } from '@/components/ui/LoadingSkeleton';
 import { 
   ShoppingBagIcon, 
@@ -66,13 +68,23 @@ export default function Home() {
     { icon: ChartBarIcon, label: 'Analytics', href: '/analytics', color: 'from-indigo-500 to-indigo-600' },
   ];
 
-  return (
+    return (
     <DashboardLayout>
       <div className="space-y-6 page-transition">
-        {/* Header with Quick Actions */}
+        {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold gradient-text">Dashboard</h1>
-          <p className="text-text-secondary mt-1">Welcome to PlatePal Admin Dashboard</p>
+          <h1 className="text-3xl font-bold gradient-text">Platform Health Command Center</h1>       
+          <p className="text-text-secondary mt-1">AI-powered insights and real-time ecosystem monitoring</p>                                                                       
+        </div>
+
+        {/* Platform Health Score & Anomalies */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <HealthScoreWidget autoRefresh={true} refreshInterval={60000} />
+          </div>
+          <div className="lg:col-span-1">
+            <AnomalyAlerts maxAlerts={5} autoDismiss={false} />
+          </div>
         </div>
 
         {/* Quick Actions */}

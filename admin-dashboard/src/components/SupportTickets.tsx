@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { SupportTicket } from '@/store/types';
 import DataTable, { Column } from './DataTable';
-import Modal from './Modal';
+import Modal from './ui/Modal';
 import { 
   ChatBubbleLeftRightIcon, 
   ExclamationTriangleIcon,

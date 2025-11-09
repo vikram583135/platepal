@@ -21,6 +21,8 @@ import { Textarea } from '@/components/ui/textarea';
 import withAuth from '@/app/components/withAuth';
 import { getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem } from '@/app/services/restaurant.service';
 import { formatINR } from '@/lib/currency';
+import MenuPerformanceAnalysis from '@/app/components/MenuPerformanceAnalysis';
+import PricingOptimizer from '@/app/components/PricingOptimizer';
 
 // --- TYPES ---
 type MenuItem = {
@@ -172,11 +174,22 @@ function MenuPage() {
   const handleDeleteClick = (item: MenuItem) => { setSelectedItem(item); setIsDeleteDialogOpen(true); };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Menu Management</h1>
-        <Button onClick={() => setIsAddDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4" /> Add New Item</Button>
+        <div>
+          <h1 className="text-3xl font-bold text-text-primary">Menu Management</h1>
+          <p className="text-text-secondary mt-1">Manage your menu items and view AI-powered performance insights</p>
+        </div>
+        <Button onClick={() => setIsAddDialogOpen(true)} className="gradient-primary text-white hover-lift">
+          <PlusCircle className="mr-2 h-4 w-4" /> Add New Item
+        </Button>
       </div>
+
+      {/* AI Menu Performance Analysis */}
+      <MenuPerformanceAnalysis />
+
+      {/* AI Pricing Optimizer */}
+      <PricingOptimizer />
 
       <Card>
         <CardHeader><CardTitle>Your Menu</CardTitle><CardDescription>A list of all the items on your menu.</CardDescription></CardHeader>

@@ -4,7 +4,7 @@ import { Order } from '@/store';
 import { formatINR } from '@/lib/currency';
 import DataTable, { Column } from './DataTable';
 import { useState } from 'react';
-import Modal from './Modal';
+import Modal from './ui/Modal';
 
 interface OrdersTableProps {
   orders: Order[];

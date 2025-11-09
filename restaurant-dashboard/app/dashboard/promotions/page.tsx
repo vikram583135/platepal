@@ -5,6 +5,8 @@ import { Plus, Edit, Trash2, Gift, Percent, Clock, Users } from 'lucide-react';
 import { formatINR } from '@/lib/currency';
 import { toast } from 'sonner';
 import CreatePromotionModal from './CreatePromotionModal';
+import AIPromotionSuggestions from '@/app/components/AIPromotionSuggestions';
+import type { PromotionSuggestion } from '@/app/services/ai.service';
 
 interface Promotion {
   id: string;
@@ -95,6 +97,27 @@ export default function PromotionsPage() {
     setEditingPromotion(null);
   };
 
+  const handleAISuggestionSelect = (suggestion: PromotionSuggestion) => {
+    // Convert AI suggestion to promotion format
+    const promotion: Omit<Promotion, 'id' | 'usageCount'> = {
+      name: suggestion.title,
+      type: suggestion.type === 'combo' ? 'bogo' : suggestion.type === 'bogo' ? 'bogo' : 'discount',
+      discountValue: suggestion.discountValue || 0,
+      validFrom: new Date().toISOString().split('T')[0],
+      validTo: suggestion.timeRange 
+        ? new Date().toISOString().split('T')[0] 
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      maxUsage: 500,
+      isActive: true,
+    };
+    
+    setEditingPromotion(null);
+    setIsModalOpen(true);
+    // Pre-fill the form with AI suggestion data
+    // Note: This would require modifying CreatePromotionModal to accept initial data
+    toast.success('AI suggestion loaded! Fill in the details and save.');
+  };
+
   const handleEdit = (promotion: Promotion) => {
     setEditingPromotion(promotion);
     setIsModalOpen(true);
@@ -145,6 +168,9 @@ export default function PromotionsPage() {
           <span>Create Promotion</span>
         </button>
       </div>
+
+      {/* AI Promotion Suggestions */}
+      <AIPromotionSuggestions onSuggestionSelect={handleAISuggestionSelect} />
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

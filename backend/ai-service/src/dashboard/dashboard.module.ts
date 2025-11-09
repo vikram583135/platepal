@@ -1,0 +1,14 @@
+import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
+import { DashboardController } from './dashboard.controller';
+import { DashboardService } from './dashboard.service';
+import { OpenAIService } from '../common/openai.service';
+
+@Module({
+  imports: [HttpModule],
+  controllers: [DashboardController],
+  providers: [DashboardService, OpenAIService],
+  exports: [DashboardService],
+})
+export class DashboardModule {}
+

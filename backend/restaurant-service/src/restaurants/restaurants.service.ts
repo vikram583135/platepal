@@ -66,5 +66,64 @@ export class RestaurantsService {
 
     return updatedMenu;
   }
+
+  // Admin methods
+  async getPendingApprovals() {
+    // Return restaurants with status 'pending'
+    return this.restaurantRepository.find({ where: { status: 'pending' } });
+  }
+
+  async approveRestaurant(restaurantId: number, notes?: string) {
+    const restaurant = await this.restaurantRepository.findOne({ where: { id: restaurantId } });
+    if (!restaurant) {
+      throw new NotFoundException(`Restaurant with ID ${restaurantId} not found`);
+    }
+
+    restaurant.status = 'active';
+    return this.restaurantRepository.save(restaurant);
+  }
+
+  async rejectRestaurant(restaurantId: number, reason: string) {
+    const restaurant = await this.restaurantRepository.findOne({ where: { id: restaurantId } });
+    if (!restaurant) {
+      throw new NotFoundException(`Restaurant with ID ${restaurantId} not found`);
+    }
+
+    restaurant.status = 'rejected';
+    return this.restaurantRepository.save(restaurant);
+  }
+
+  async getAIScreenedApplications() {
+    // Return pending applications sorted by risk score (mock)
+    const pending = await this.restaurantRepository.find({ where: { status: 'pending' } });
+    return pending.map((r: any) => ({
+      ...r,
+      aiRiskScore: Math.floor(Math.random() * 40) + 60, // Mock risk score
+      flags: [],
+    }));
+  }
+
+  async getSignupTrends(region?: string) {
+    // Mock signup trends data
+    return {
+      totalSignups: 150,
+      monthlyGrowth: 12.5,
+      regionalBreakdown: [
+        { region: 'Downtown', signups: 45, change: 8.2 },
+        { region: 'Suburbs', signups: 75, change: 15.3 },
+        { region: 'Uptown', signups: 30, change: 5.1 },
+      ],
+    };
+  }
+
+  async suspendRestaurant(restaurantId: number, reason: string) {
+    const restaurant = await this.restaurantRepository.findOne({ where: { id: restaurantId } });
+    if (!restaurant) {
+      throw new NotFoundException(`Restaurant with ID ${restaurantId} not found`);
+    }
+
+    restaurant.status = 'suspended';
+    return this.restaurantRepository.save(restaurant);
+  }
 }
 

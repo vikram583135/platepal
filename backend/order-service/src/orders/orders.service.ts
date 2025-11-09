@@ -182,4 +182,105 @@ export class OrdersService {
 
     return updatedOrder;
   }
+
+  async flagOrderAsFraud(orderId: number, reason: string): Promise<Order> {
+    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new Error('Order not found');
+    }
+    
+    // In production, you would add a fraud flag or update order metadata
+    // For now, we'll just log it
+    console.log(`Order ${orderId} flagged as fraud: ${reason}`);
+    
+    return order;
+  }
+
+  async getPlatformHealth() {
+    const orders = await this.orderRepository.find();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const total = orders.length;
+    const pending = orders.filter(o => ['new', 'preparing', 'ready', 'out_for_delivery'].includes(o.status)).length;
+    const completed = orders.filter(o => o.status === 'delivered').length;
+    
+    // Calculate average delivery time (mock calculation)
+    const avgDeliveryTime = 35; // This would come from actual delivery data
+
+    return {
+      orders: {
+        total,
+        pending,
+        completed,
+        averageDeliveryTime: avgDeliveryTime,
+      },
+      restaurants: {
+        total: 0, // Would come from restaurant service
+        active: 0,
+        pendingApproval: 0,
+        signupTrend: 0,
+      },
+      deliveryPartners: {
+        total: 0, // Would come from user service
+        active: 0,
+        onDuty: 0,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  async getFraudAlerts() {
+    // Return suspicious orders that need review
+    const orders = await this.orderRepository.find({
+      where: { status: In(['new', 'preparing', 'delivered']) },
+      order: { createdAt: 'DESC' },
+      take: 50,
+    });
+
+    // Filter for potentially suspicious orders (high value orders)
+    return orders.filter(order => {
+      return order.totalPrice > 100;
+    }).slice(0, 10);
+  }
+
+  async getRegionalStats() {
+    // Mock regional stats - in production this would aggregate by location
+    return [
+      {
+        region: 'Downtown',
+        signupChange: 5.2,
+        deliveryTimeChange: -2.1,
+      },
+      {
+        region: 'Suburbs',
+        signupChange: 8.7,
+        deliveryTimeChange: 1.3,
+      },
+    ];
+  }
+
+  async getSuspiciousOrders() {
+    const orders = await this.orderRepository.find({
+      order: { createdAt: 'DESC' },
+      take: 100,
+    });
+
+    // Identify suspicious patterns
+    return orders
+      .filter(order => {
+        // High value orders
+        if (order.totalPrice > 150) return true;
+        return false;
+      })
+      .slice(0, 20)
+      .map(order => ({
+        id: order.id.toString(),
+        orderId: order.id.toString(),
+        userId: order.customerId.toString(),
+        amount: order.totalPrice,
+        timestamp: order.createdAt.toISOString(),
+        status: order.status,
+      }));
+  }
 }

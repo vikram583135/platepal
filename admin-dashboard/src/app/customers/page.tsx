@@ -11,7 +11,7 @@ import { TableSkeleton } from '@/components/ui/LoadingSkeleton';
 import EmptyState from '@/components/ui/EmptyState';
 import SearchInput from '@/components/ui/SearchInput';
 import Badge from '@/components/ui/Badge';
-import Modal from '@/components/Modal';
+import Modal from '@/components/ui/Modal';
 import { 
   UsersIcon, 
   ArrowPathIcon,

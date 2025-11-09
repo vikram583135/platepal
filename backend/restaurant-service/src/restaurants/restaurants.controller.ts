@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   ParseIntPipe,
   Put,
@@ -35,5 +36,36 @@ export class RestaurantsController {
     @Body() updateMenuDto: UpdateMenuDto,
   ) {
     return this.restaurantsService.updateMenu(id, updateMenuDto);
+  }
+
+  // Admin endpoints
+  @Get('pending-approval')
+  getPendingApprovals() {
+    return this.restaurantsService.getPendingApprovals();
+  }
+
+  @Post(':id/approve')
+  approveRestaurant(@Param('id', ParseIntPipe) id: number, @Body() body: { notes?: string }) {
+    return this.restaurantsService.approveRestaurant(id, body.notes);
+  }
+
+  @Post(':id/reject')
+  rejectRestaurant(@Param('id', ParseIntPipe) id: number, @Body() body: { reason: string }) {
+    return this.restaurantsService.rejectRestaurant(id, body.reason);
+  }
+
+  @Get('ai-screening')
+  getAIScreenedApplications() {
+    return this.restaurantsService.getAIScreenedApplications();
+  }
+
+  @Get('analytics/signup-trends')
+  getSignupTrends(@Query('region') region?: string) {
+    return this.restaurantsService.getSignupTrends(region);
+  }
+
+  @Post(':id/suspend')
+  suspendRestaurant(@Param('id', ParseIntPipe) id: number, @Body() body: { reason: string }) {
+    return this.restaurantsService.suspendRestaurant(id, body.reason);
   }
 }

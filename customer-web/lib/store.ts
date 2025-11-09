@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { getBehaviorTracker, UserPreferences } from './analytics';
 
 export interface CartItem {
   id: string;
@@ -135,5 +136,111 @@ export const useFavoritesStore = create<FavoritesState>()(
       name: 'customer-favorites',
     }
   )
+);
+
+// Behavior Store - Wrapper around analytics tracker
+interface BehaviorState {
+  tracker: ReturnType<typeof getBehaviorTracker>;
+  preferences: UserPreferences | null;
+  updatePreferences: () => void;
+}
+
+export const useBehaviorStore = create<BehaviorState>()(
+  persist(
+    (set, get) => ({
+      tracker: getBehaviorTracker(),
+      preferences: null,
+      updatePreferences: () => {
+        const tracker = get().tracker;
+        const preferences = tracker.getPreferences();
+        set({ preferences });
+      },
+    }),
+    {
+      name: 'customer-behavior',
+      partialize: (state) => ({
+        preferences: state.preferences,
+        // Don't persist tracker, it's recreated from localStorage
+      }),
+    }
+  )
+);
+
+// Preferences Store - User dietary and search preferences
+interface PreferencesState {
+  dietaryRestrictions: string[];
+  allergens: string[];
+  preferences: string[];
+  complexRequirements: string[];
+  favoriteCuisines: string[];
+  priceRange: { min: number; max: number } | null;
+  setDietaryRestrictions: (restrictions: string[]) => void;
+  setAllergens: (allergens: string[]) => void;
+  setPreferences: (prefs: string[]) => void;
+  setComplexRequirements: (requirements: string[]) => void;
+  setFavoriteCuisines: (cuisines: string[]) => void;
+  setPriceRange: (range: { min: number; max: number } | null) => void;
+  clearAll: () => void;
+}
+
+export const usePreferencesStore = create<PreferencesState>()(
+  persist(
+    (set) => ({
+      dietaryRestrictions: [],
+      allergens: [],
+      preferences: [],
+      complexRequirements: [],
+      favoriteCuisines: [],
+      priceRange: null,
+      setDietaryRestrictions: (restrictions) => set({ dietaryRestrictions: restrictions }),
+      setAllergens: (allergens) => set({ allergens }),
+      setPreferences: (prefs) => set({ preferences: prefs }),
+      setComplexRequirements: (requirements) => set({ complexRequirements: requirements }),
+      setFavoriteCuisines: (cuisines) => set({ favoriteCuisines: cuisines }),
+      setPriceRange: (range) => set({ priceRange: range }),
+      clearAll: () => set({
+        dietaryRestrictions: [],
+        allergens: [],
+        preferences: [],
+        complexRequirements: [],
+        favoriteCuisines: [],
+        priceRange: null,
+      }),
+    }),
+    {
+      name: 'customer-preferences',
+    }
+  )
+);
+
+// Recommendations Store - Cached AI recommendations
+interface RecommendationsState {
+  recommendations: any;
+  lastUpdated: number | null;
+  setRecommendations: (recommendations: any) => void;
+  clearRecommendations: () => void;
+  isStale: () => boolean;
+}
+
+const RECOMMENDATIONS_TTL = 30 * 60 * 1000; // 30 minutes
+
+export const useRecommendationsStore = create<RecommendationsState>()(
+  (set, get) => ({
+    recommendations: null,
+    lastUpdated: null,
+    setRecommendations: (recommendations) => set({
+      recommendations,
+      lastUpdated: Date.now(),
+    }),
+    clearRecommendations: () => set({
+      recommendations: null,
+      lastUpdated: null,
+    }),
+    isStale: () => {
+      const state = get();
+      if (!state.lastUpdated) return true;
+      return Date.now() - state.lastUpdated > RECOMMENDATIONS_TTL;
+    },
+  })
 );
 

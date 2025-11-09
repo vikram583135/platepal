@@ -6,11 +6,11 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { RootState, AppDispatch } from '@/store/store';
 import { logout } from '@/store';
-import { 
-  HomeIcon, 
+import {
+  HomeIcon,
   ShoppingBagIcon, 
-  BuildingStorefrontIcon, 
-  TruckIcon, 
+  BuildingStorefrontIcon,
+  TruckIcon,
   UsersIcon,
   ChartBarIcon,
   CogIcon,
@@ -19,7 +19,9 @@ import {
   XMarkIcon,
   ClipboardDocumentCheckIcon,
   ChatBubbleLeftRightIcon,
+  MapIcon,
 } from '@heroicons/react/24/outline';
+import NLQueryBar from './NLQueryBar';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -40,6 +42,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { name: 'Customers', href: '/customers', icon: UsersIcon, color: 'from-pink-500 to-pink-600' },
     { name: 'Support Tickets', href: '/tickets', icon: ChatBubbleLeftRightIcon, color: 'from-cyan-500 to-cyan-600' },
     { name: 'Analytics', href: '/analytics', icon: ChartBarIcon, color: 'from-indigo-500 to-indigo-600' },
+    { name: 'Heatmap', href: '/heatmap', icon: MapIcon, color: 'from-red-500 to-red-600' },
     { name: 'Settings', href: '/settings', icon: CogIcon, color: 'from-gray-500 to-gray-600' },
   ].map(item => ({
     ...item,
@@ -187,6 +190,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </button>
         </div>
         <main className="flex-1 relative overflow-y-auto focus:outline-none">
+          {/* Header with NL Query Bar */}
+          <div className="sticky top-0 z-30 bg-background border-b border-border px-4 sm:px-6 md:px-8 py-4">
+            <div className="max-w-7xl mx-auto">
+              <NLQueryBar placeholder="Ask anything about your platform... e.g., 'Show me all one-star reviews from last week'" />
+            </div>
+          </div>
+          
           <div className="py-6">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
               {children}

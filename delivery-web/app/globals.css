@@ -563,3 +563,174 @@ textarea:focus-visible {
   animation: pulse 2s infinite;
 }
 
+/* Safety-First Mission View Styles - WCAG AAA High Contrast */
+.mission-view {
+  background-color: #000000;
+  color: #FFFFFF;
+  min-height: 100vh;
+}
+
+.mission-view-text-primary {
+  color: #FFFFFF;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.mission-view-text-secondary {
+  color: #FFFFFF;
+  opacity: 0.9;
+}
+
+.mission-view-text-tertiary {
+  color: #FFFFFF;
+  opacity: 0.8;
+}
+
+/* High Contrast Text - WCAG AAA (7:1 ratio minimum) */
+.mission-title {
+  font-size: 3rem; /* 48px */
+  font-weight: 700;
+  line-height: 1.2;
+  color: #FFFFFF;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.mission-subtitle {
+  font-size: 2rem; /* 32px */
+  font-weight: 600;
+  line-height: 1.3;
+  color: #FFFFFF;
+  opacity: 0.9;
+}
+
+.mission-address {
+  font-size: 1.5rem; /* 24px */
+  font-weight: 500;
+  line-height: 1.5;
+  color: #FFFFFF;
+  opacity: 0.8;
+}
+
+/* Mission View Buttons - Large Touch Targets (minimum 72px height) */
+.mission-button-primary {
+  min-height: 72px;
+  min-width: 100%;
+  font-size: 1.875rem; /* 30px */
+  font-weight: 700;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.mission-button-primary:active {
+  transform: scale(0.95);
+}
+
+.mission-button-secondary {
+  min-height: 64px;
+  min-width: 100%;
+  font-size: 1.25rem; /* 20px */
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  transition: transform 0.1s ease;
+}
+
+.mission-button-secondary:active {
+  transform: scale(0.95);
+}
+
+/* Dark Mode Support for Night Driving */
+@media (prefers-color-scheme: dark) {
+  .mission-view {
+    background-color: #000000;
+    color: #FFFFFF;
+  }
+
+  .mission-view-text-primary,
+  .mission-view-text-secondary,
+  .mission-view-text-tertiary {
+    color: #FFFFFF;
+  }
+}
+
+/* High Contrast Mode - Maximum Visibility */
+@media (prefers-contrast: high) {
+  .mission-view {
+    background-color: #000000;
+    color: #FFFFFF;
+  }
+
+  .mission-title,
+  .mission-subtitle,
+  .mission-address {
+    color: #FFFFFF;
+    text-shadow: 0 0 0 transparent; /* Remove shadow for maximum contrast */
+  }
+
+  .mission-button-primary,
+  .mission-button-secondary {
+    border: 3px solid #FFFFFF;
+  }
+}
+
+/* Large Touch Targets - Minimum 44x44px, preferably 56x56px or larger */
+.touch-target-mission {
+  min-height: 72px;
+  min-width: 72px;
+  padding: 1rem;
+}
+
+/* Minimal Design - Remove Decorative Elements in Mission View */
+.mission-view * {
+  /* Ensure no decorative borders or shadows that distract */
+}
+
+.mission-view .decorative {
+  display: none;
+}
+
+/* Reduced Motion for Safety */
+@media (prefers-reduced-motion: reduce) {
+  .mission-view * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* High Visibility Icons */
+.mission-icon {
+  width: 8rem; /* 128px */
+  height: 8rem; /* 128px */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.mission-icon svg {
+  width: 64px;
+  height: 64px;
+  color: #FFFFFF;
+}
+
+/* Focus States for Mission View - High Visibility */
+.mission-view button:focus-visible,
+.mission-view a:focus-visible {
+  outline: 4px solid #FFFFFF;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+/* Mission View Container - Full Screen Overlay */
+.mission-view-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+

@@ -8,9 +8,11 @@ import RestaurantCard from '@/components/RestaurantCard';
 import MobileNav from '@/components/MobileNav';
 import SkeletonCard from '@/components/SkeletonCard';
 import EmptyState from '@/components/EmptyState';
-import RecommendationsCarousel from '@/components/RecommendationsCarousel';
+import ForYouHub from '@/components/ForYouHub';
+import ConversationalSearch from '@/components/ConversationalSearch';
 import RestaurantFilters from '@/components/RestaurantFilters';
-import { LogOut, RefreshCw, Search, Store, X } from 'lucide-react';
+import { useBehaviorStore } from '@/lib/store';
+import { LogOut, RefreshCw, Store } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function HomePage() {
@@ -18,44 +20,70 @@ export default function HomePage() {
   const [filteredRestaurants, setFilteredRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { user, token, logout } = useAuthStore();
   const { addItem } = useCartStore();
+  const { tracker } = useBehaviorStore();
   const router = useRouter();
 
   useEffect(() => {
     loadRestaurants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced search suggestions
-  useEffect(() => {
-    if (searchQuery.length > 0) {
-      const suggestions = restaurants
-        .filter((r) =>
-          r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          r.description.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-        .slice(0, 5)
-        .map((r) => r.name);
-      setSearchSuggestions(suggestions);
-      setShowSuggestions(suggestions.length > 0);
+  // Search filtering with conversational search
+  const handleConversationalSearch = (query: string, parsedFilters?: any) => {
+    setSearchQuery(query);
+    
+    // Track search
+    tracker.trackSearch(query, restaurants.length);
+    
+    // Apply filters if provided
+    let filtered = restaurants;
+    
+    if (parsedFilters) {
+      if (parsedFilters.cuisines.length > 0) {
+        // Filter by cuisine (mock - would need actual cuisine data)
+        filtered = filtered.filter((r) => {
+          const desc = r.description?.toLowerCase() || '';
+          return parsedFilters.cuisines.some((c: string) => 
+            desc.includes(c.toLowerCase())
+          );
+        });
+      }
+      
+      if (parsedFilters.dietaryRestrictions.length > 0) {
+        // Filter by dietary (mock - would need actual dietary data)
+      }
+      
+      if (parsedFilters.priceRange) {
+        // Filter by price (mock - would need actual price data)
+      }
+      
+      if (parsedFilters.keywords.length > 0) {
+        filtered = filtered.filter((r) =>
+          parsedFilters.keywords.some((keyword: string) =>
+            r.name.toLowerCase().includes(keyword.toLowerCase()) ||
+            r.description?.toLowerCase().includes(keyword.toLowerCase())
+          )
+        );
+      }
     } else {
-      setSearchSuggestions([]);
-      setShowSuggestions(false);
+      // Simple text search
+      filtered = restaurants.filter(
+        (r) =>
+          r.name.toLowerCase().includes(query.toLowerCase()) ||
+          r.description?.toLowerCase().includes(query.toLowerCase())
+      );
     }
-  }, [searchQuery, restaurants]);
-
-  // Search filtering
+    
+    setFilteredRestaurants(filtered);
+  };
+  
   const searchedRestaurants = useMemo(() => {
     if (!searchQuery) return restaurants;
-    return restaurants.filter(
-      (r) =>
-        r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [searchQuery, restaurants]);
+    return filteredRestaurants;
+  }, [searchQuery, filteredRestaurants, restaurants]);
 
   const loadRestaurants = async (retries = 3) => {
     try {
@@ -166,50 +194,12 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* Enhanced Search Bar with Autocomplete */}
-        <div className="relative animate-slide-down">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/80 z-10" size={20} />
-          <input
-            type="text"
-            placeholder="Search restaurants, cuisines..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => searchQuery && setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            className="w-full pl-10 pr-10 py-3 rounded-md text-neutral-text-primary bg-white/95 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white focus:bg-white shadow-md transition-all"
+        {/* Conversational Search */}
+        <div className="animate-slide-down">
+          <ConversationalSearch
+            onSearch={handleConversationalSearch}
+            restaurants={restaurants}
           />
-          {searchQuery && (
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setShowSuggestions(false);
-              }}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-neutral-text-secondary hover:text-white transition-colors"
-            >
-              <X size={18} />
-            </button>
-          )}
-          
-          {/* Autocomplete Suggestions */}
-          {showSuggestions && searchSuggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-elevated border border-neutral-border max-h-60 overflow-y-auto z-50 animate-slide-down">
-              {searchSuggestions.map((suggestion, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    setSearchQuery(suggestion);
-                    setShowSuggestions(false);
-                  }}
-                  className="w-full text-left px-4 py-3 hover:bg-primary-light transition-colors border-b border-neutral-border last:border-0"
-                >
-                  <div className="flex items-center gap-2">
-                    <Search size={16} className="text-neutral-text-secondary" />
-                    <span className="text-neutral-text-primary">{suggestion}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
@@ -223,9 +213,9 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Recommendations Carousel - Only show when not searching */}
+        {/* For You Hub - Only show when not searching */}
         {!searchQuery && !loading && (
-          <RecommendationsCarousel onAddToCart={handleAddRecommendationToCart} />
+          <ForYouHub onAddToCart={handleAddRecommendationToCart} />
         )}
 
         {/* Filters and Sort - Only show when not searching or when we have restaurants */}

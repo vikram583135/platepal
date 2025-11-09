@@ -6,7 +6,9 @@ import { useAuthStore, useCartStore } from '@/lib/store';
 import { apiService } from '@/lib/api';
 import CartItem from '@/components/CartItem';
 import MobileNav from '@/components/MobileNav';
-import { ArrowLeft, ShoppingBag, Tag, X } from 'lucide-react';
+import PredictiveCartSuggestions from '@/components/PredictiveCartSuggestions';
+import ConversationalCart from '@/components/ConversationalCart';
+import { ArrowLeft, ShoppingBag, Tag, X, MessageCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -17,6 +19,7 @@ export default function CartPage() {
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null);
   const [showPromoInput, setShowPromoInput] = useState(false);
+  const [showConversationalCart, setShowConversationalCart] = useState(false);
 
   const subtotal = getTotal();
   // Delivery fee in INR - ₹30 per order
@@ -126,6 +129,22 @@ export default function CartPage() {
         </div>
       ) : (
         <>
+          {/* Predictive Cart Suggestions */}
+          <div className="p-4">
+            <PredictiveCartSuggestions />
+          </div>
+
+          {/* Conversational Cart Button */}
+          <div className="px-4 mb-4">
+            <button
+              onClick={() => setShowConversationalCart(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 rounded-xl font-semibold text-primary hover:from-primary/20 hover:to-secondary/20 transition-all active:scale-95"
+            >
+              <MessageCircle size={20} />
+              <span>Chat with Cart Assistant</span>
+            </button>
+          </div>
+
           {/* Cart Items - Grouped by Restaurant */}
           <div className="p-4 space-y-4">
             {itemsByRestaurant.map((group, groupIndex) => (
@@ -245,6 +264,11 @@ export default function CartPage() {
             </button>
           </div>
         </>
+      )}
+
+      {/* Conversational Cart Modal */}
+      {showConversationalCart && (
+        <ConversationalCart onClose={() => setShowConversationalCart(false)} />
       )}
 
       <MobileNav />

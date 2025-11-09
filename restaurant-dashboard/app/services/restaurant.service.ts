@@ -18,6 +18,29 @@ type Review = {
   response?: string;
 };
 
+// Helper function to get restaurant ID
+export const getRestaurantId = async (): Promise<number | null> => {
+  const token = localStorage.getItem('accessToken');
+  if (!token) return null;
+
+  try {
+    const decodedToken: { sub: string } = JSON.parse(atob(token.split('.')[1]));
+    const userId = decodedToken.sub;
+
+    const restaurantResponse = await axios.get(`http://localhost:3002/restaurants?ownerId=${userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (restaurantResponse.data.length === 0) {
+      return null;
+    }
+    return restaurantResponse.data[0].id;
+  } catch (error) {
+    console.error('Error fetching restaurant ID:', error);
+    return null;
+  }
+};
+
 // --- API FUNCTIONS ---
 export const getMenuItems = async (): Promise<MenuItem[]> => {
   const token = localStorage.getItem('accessToken');

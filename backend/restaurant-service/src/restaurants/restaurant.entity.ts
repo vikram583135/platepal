@@ -18,6 +18,9 @@ export class Restaurant {
   @Column({ nullable: true })
   menuId: string;
 
+  @Column({ default: 'pending' })
+  status: string;
+
   @OneToMany(() => Review, review => review.restaurant)
   reviews: Review[];
 }

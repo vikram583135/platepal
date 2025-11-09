@@ -7,7 +7,7 @@ import { useAuthStore, useCartStore } from '@/lib/store';
 import { initWebSocket, getWebSocketClient, OrderEvent } from '@/lib/websocket';
 import MobileNav from '@/components/MobileNav';
 import OrderStatus from '@/components/OrderStatus';
-import { Receipt, RefreshCw, Search, Filter, RotateCcw, ChevronDown, X, Wifi, WifiOff } from 'lucide-react';
+import { Receipt, RefreshCw, Search, Filter, RotateCcw, ChevronDown, X, Wifi, WifiOff, Star } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -480,6 +480,15 @@ export default function OrdersPage() {
                       >
                         {isActive ? 'Track' : 'Details'}
                       </button>
+                      {(order.status === 'completed' || order.status === 'delivered') && (
+                        <button
+                          onClick={() => router.push(`/reviews/new?orderId=${order.id}`)}
+                          className="px-4 py-2 border border-primary text-primary rounded-md text-sm font-medium hover:bg-primary-light transition-all active:scale-95 flex items-center gap-2"
+                        >
+                          <Star size={16} />
+                          Review
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

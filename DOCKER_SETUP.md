@@ -29,39 +29,49 @@ This guide covers the Docker configuration for all PlatePal services, including 
 - **Health Check**: Enabled
 - **CORS**: Configured for all frontend origins
 
+#### 4. AI Service (`ai-service`)
+- **Port**: 3008 (external) → 3004 (internal)
+- **Technology**: NestJS with Google Gemini API
+- **Health Check**: Enabled
+- **Purpose**: AI-powered insights, recommendations, and analysis
+- **Integration**: Connected to order-service and restaurant-service
+
 ### Frontend Services
 
-#### 4. Restaurant Dashboard (`restaurant-dashboard`)
+#### 5. Restaurant Dashboard (`restaurant-dashboard`)
 - **Port**: 3004 (external) → 3000 (internal)
 - **Environment Variables**:
   - `NEXT_PUBLIC_API_URL`: Restaurant service URL
   - `NEXT_PUBLIC_AUTH_URL`: User service URL
   - `NEXT_PUBLIC_ORDER_URL`: Order service URL
+  - `NEXT_PUBLIC_AI_SERVICE_URL`: AI service URL
   - `NEXT_PUBLIC_WS_URL`: WebSocket URL
+- **AI Features**: AI Co-Pilot, dashboard insights, order analysis, menu optimization, review sentiment analysis, promotion suggestions
 
-#### 5. Admin Dashboard (`admin-dashboard`)
+#### 6. Admin Dashboard (`admin-dashboard`)
 - **Port**: 3005 (external) → 3000 (internal)
 - **Environment Variables**: Same as Restaurant Dashboard
 
-#### 6. Customer Web (`customer-web`)
+#### 7. Customer Web (`customer-web`)
 - **Port**: 3006 (external) → 3000 (internal)
 - **Environment Variables**: API and WebSocket URLs
+- **AI Features**: Conversational search, personalized recommendations, AI review assistant, dietary filter
 
-#### 7. Delivery Web (`delivery-web`)
+#### 8. Delivery Web (`delivery-web`)
 - **Port**: 3007 (external) → 3000 (internal)
 - **Environment Variables**: API and WebSocket URLs
 
 ### Infrastructure
 
-#### 8. PostgreSQL Database (`postgres_db`)
+#### 9. PostgreSQL Database (`postgres_db`)
 - **Port**: 5433 (external) → 5432 (internal)
 - **Version**: 15-alpine
 
-#### 9. MongoDB Database (`mongo_db`)
+#### 10. MongoDB Database (`mongo_db`)
 - **Port**: 27017
 - **Version**: latest
 
-#### 10. Nginx Reverse Proxy (`nginx`)
+#### 11. Nginx Reverse Proxy (`nginx`)
 - **Ports**: 80, 443
 - **Features**: 
   - API routing
@@ -101,6 +111,11 @@ All backend Dockerfiles use **multi-stage builds** with:
 - ✅ Health check endpoints
 - ✅ Optimized image size
 
+**AI Service Specific**:
+- ✅ Google Gemini API integration
+- ✅ Health check at `/ai/health`
+- ✅ Extended timeouts for AI processing
+
 ---
 
 ## 🌐 WebSocket Configuration
@@ -123,6 +138,33 @@ All frontend services include:
 
 ---
 
+## 🤖 AI Service Configuration
+
+### AI Service Features
+- **Dashboard Summary**: Sales forecasts, popular items, urgent alerts
+- **Natural Language Analytics**: Query interface for data analysis
+- **Order Analysis**: AI-powered order flags and prioritization
+- **Menu Performance**: Item comparison and recommendations
+- **Pricing Optimizer**: AI-powered pricing suggestions
+- **Review Sentiment Analysis**: Automated categorization and reply generation
+- **Smart Promotions**: Data-driven promotion suggestions
+
+### API Endpoints
+All AI endpoints are prefixed with `/ai`:
+- `/ai/health` - Health check
+- `/ai/dashboard/summary` - Dashboard insights
+- `/ai/analytics/query` - Natural language queries
+- `/ai/orders/analyze` - Order complexity analysis
+- `/ai/menu/analyze` - Menu performance analysis
+- `/ai/reviews/analyze` - Review sentiment analysis
+- `/ai/promotions/suggest` - Promotion suggestions
+
+### Nginx Routing
+- AI service routes: `/api/ai/*` → `ai-service:3004/ai/*`
+- Extended timeout (60s) for AI processing
+
+---
+
 ## 📦 Environment Variables
 
 ### Frontend Services
@@ -134,6 +176,11 @@ NEXT_PUBLIC_API_URL=http://restaurant-service:3002
 NEXT_PUBLIC_AUTH_URL=http://user-service:3001
 NEXT_PUBLIC_ORDER_URL=http://order-service:3003
 NEXT_PUBLIC_WS_URL=ws://order-service:3003
+```
+
+**Restaurant Dashboard Additional**:
+```bash
+NEXT_PUBLIC_AI_SERVICE_URL=http://ai-service:3004
 ```
 
 **Note**: Internal Docker network uses service names, not `localhost`
@@ -150,6 +197,16 @@ DB_PASSWORD=your_strong_password_123!
 DB_NAME=platepal_db
 JWT_SECRET=your_jwt_secret_key_here
 CORS_ORIGIN=http://localhost:3004,http://localhost:3005,http://localhost:3006,http://localhost:3007
+```
+
+**AI Service Variables**:
+```bash
+NODE_ENV=production
+OPENAI_API_KEY=your_openai_api_key
+GEMINI_API_KEY=your_gemini_api_key
+ORDER_SERVICE_URL=http://order-service:3003
+RESTAURANT_SERVICE_URL=http://restaurant-service:3002
+PORT=3004
 ```
 
 ---
@@ -198,6 +255,7 @@ docker-compose up -d --build
 All services include health checks:
 
 - **Backend Services**: HTTP endpoint at `/health`
+- **AI Service**: HTTP endpoint at `/ai/health`
 - **Frontend Services**: HTTP endpoint at `/api/health`
 - **Interval**: 30 seconds
 - **Timeout**: 10 seconds
@@ -207,6 +265,11 @@ All services include health checks:
 Check service health:
 ```bash
 docker-compose ps
+```
+
+Test AI service health:
+```bash
+curl http://localhost:3008/ai/health
 ```
 
 ---
@@ -236,6 +299,7 @@ docker-compose ps
 | User Service | 3001 | 3001 | API |
 | Restaurant Service | 3002 | 3002 | API |
 | Order Service | 3003 | 3003 | API + WebSocket |
+| AI Service | 3008 | 3004 | API |
 | Restaurant Dashboard | 3004 | 3000 | Web |
 | Admin Dashboard | 3005 | 3000 | Web |
 | Customer Web | 3006 | 3000 | Web |
@@ -253,6 +317,14 @@ Nginx routes WebSocket connections:
 - **Backend**: `order-service:3003`
 - **Protocol**: WebSocket upgrade
 - **Timeout**: 86400 seconds (24 hours)
+
+## 🔄 AI Service Routing
+
+Nginx routes AI service requests:
+- **Path**: `/api/ai/*`
+- **Backend**: `ai-service:3004`
+- **Rewrite**: `/api/ai/*` → `/ai/*`
+- **Timeout**: 60 seconds (for AI processing)
 
 ---
 
@@ -351,6 +423,33 @@ docker system prune -a
    curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" http://localhost/socket.io/
    ```
 
+### AI Service Issues
+
+1. **Check AI service logs**:
+   ```bash
+   docker-compose logs ai-service
+   ```
+
+2. **Verify API keys**:
+   ```bash
+   docker-compose exec ai-service env | grep -E "GEMINI|OPENAI"
+   ```
+
+3. **Test AI service endpoint**:
+   ```bash
+   curl http://localhost:3008/ai/health
+   ```
+
+4. **Check service dependencies**:
+   ```bash
+   docker-compose ps order-service restaurant-service
+   ```
+
+5. **Verify nginx routing**:
+   ```bash
+   curl http://localhost/api/ai/health
+   ```
+
 ### Port Conflicts
 
 If ports are already in use:
@@ -386,16 +485,21 @@ If ports are already in use:
    - Update `MONGO_INITDB_ROOT_PASSWORD`
    - Update `JWT_SECRET`
 
-2. **Use Secrets Management**:
+2. **Secure API Keys**:
+   - Update `OPENAI_API_KEY` and `GEMINI_API_KEY` in AI service
+   - Never commit API keys to version control
+   - Use environment variables or secrets management
+
+3. **Use Secrets Management**:
    - Docker secrets for production
    - Environment files (`.env`) not in version control
 
-3. **Network Security**:
+4. **Network Security**:
    - Use Docker networks for isolation
    - Limit exposed ports
    - Use reverse proxy (Nginx) for SSL/TLS
 
-4. **Image Security**:
+5. **Image Security**:
    - Regular base image updates
    - Scan images for vulnerabilities
    - Use specific image tags, not `latest`
@@ -411,6 +515,6 @@ If ports are already in use:
 
 ---
 
-*Last Updated: Based on Phase 1-6 Implementation*
-*Version: 2.0*
+*Last Updated: Includes AI Service and all enhancements*
+*Version: 3.0*
 

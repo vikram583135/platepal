@@ -5,6 +5,8 @@ import { TrendingUp, TrendingDown, Calendar, Download, Filter } from 'lucide-rea
 import { formatINR, calculateGrowth } from '@/lib/currency';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { toast } from 'sonner';
+import NaturalLanguageQuery from '@/app/components/NaturalLanguageQuery';
+import ChartInsights from '@/app/components/ChartInsights';
 
 export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | '1y' | 'custom'>('30d');
@@ -134,6 +136,14 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Natural Language Query */}
+      <div className="bg-surface rounded-lg p-6 shadow-soft hover-lift">
+        <h3 className="text-lg font-bold text-text-primary mb-4">Ask Questions About Your Data</h3>
+        <NaturalLanguageQuery 
+          dataContext={{ comparisonData, categoryData }}
+        />
+      </div>
+
       {/* Year-over-Year Comparison */}
       <div className="bg-surface rounded-lg p-6 shadow-soft hover-lift">
         <h3 className="text-lg font-bold text-text-primary mb-6">Year-over-Year Revenue Comparison</h3>
@@ -147,6 +157,7 @@ export default function AnalyticsPage() {
             <Bar dataKey="lastYear" fill="#DFE4EA" name="2023" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        <ChartInsights chartData={comparisonData} chartType="bar" />
       </div>
 
       {/* Category Performance */}
@@ -172,6 +183,7 @@ export default function AnalyticsPage() {
               <Tooltip formatter={(value: any, name: any, props: any) => [formatINR(props.payload.revenue), name]} />
             </PieChart>
           </ResponsiveContainer>
+          <ChartInsights chartData={categoryData} chartType="pie" />
         </div>
 
         <div className="bg-surface rounded-lg p-6 shadow-soft hover-lift">

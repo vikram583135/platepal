@@ -3,11 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiService } from '@/lib/api';
-import { useAuthStore, useTaskStore, useEarningsStore } from '@/lib/store';
+import { useAuthStore, useTaskStore, useEarningsStore, useMissionStateStore, useMapModeStore, useSmartNotificationsStore, MissionState } from '@/lib/store';
 import StatusButton from '@/components/StatusButton';
 import PhotoCapture from '@/components/PhotoCapture';
 import SignatureCapture from '@/components/SignatureCapture';
-import { ArrowLeft, MapPin, Phone, Navigation, Camera, PenTool, Clock, CheckCircle, Package, Truck, AlertCircle, Map } from 'lucide-react';
+import MissionView from '@/components/MissionView';
+import VoiceAssistant from '@/components/VoiceAssistant';
+import GlanceableMap from '@/components/GlanceableMap';
+import NavigationOverlay from '@/components/NavigationOverlay';
+import SmartNotification from '@/components/SmartNotification';
+import { ArrowLeft, MapPin, Phone, Navigation, Camera, PenTool, Clock, CheckCircle, Package, Truck, AlertCircle, Map, Maximize2, Minimize2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -16,6 +21,9 @@ export default function ActiveDeliveryPage() {
   const { token } = useAuthStore();
   const { currentTask, setCurrentTask } = useTaskStore();
   const { addEarning } = useEarningsStore();
+  const { missionState, setMissionState } = useMissionStateStore();
+  const { mapMode, setMapMode } = useMapModeStore();
+  const { smartNotifications, addNotification, removeNotification } = useSmartNotificationsStore();
   const [updating, setUpdating] = useState(false);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [showSignatureCapture, setShowSignatureCapture] = useState(false);
@@ -23,6 +31,21 @@ export default function ActiveDeliveryPage() {
   const [deliverySignature, setDeliverySignature] = useState<string | null>(null);
   const [showCompletionAnimation, setShowCompletionAnimation] = useState(false);
   const [estimatedTime, setEstimatedTime] = useState<{ pickup?: string; delivery?: string }>({});
+  const [missionMode, setMissionMode] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [nextTurn, setNextTurn] = useState<string>('');
+  const [remainingTime, setRemainingTime] = useState<string>('');
+  const [remainingDistance, setRemainingDistance] = useState<string>('');
+
+  // Helper function to parse address to coordinates (mock - in production use geocoding service)
+  const parseAddressToCoordinates = (address: string): { lat: number; lng: number } => {
+    // Mock coordinates - in production, use a geocoding API
+    const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return {
+      lat: 28.6139 + (hash % 1000) / 10000, // Delhi area mock
+      lng: 77.2090 + (hash % 500) / 10000,
+    };
+  };
 
   useEffect(() => {
     if (!token) {
@@ -32,6 +55,43 @@ export default function ActiveDeliveryPage() {
 
     if (!currentTask) {
       router.push('/dashboard');
+      return;
+    }
+
+    // Determine mission state based on task status
+    const status = currentTask.status.toLowerCase();
+    if (status === 'ready' || status === 'pending') {
+      setMissionState('navigate');
+    } else if (status === 'picked_up' || status === 'in_transit') {
+      setMissionState('delivery');
+    } else {
+      setMissionState('pickup');
+    }
+
+    // Load smart notifications for this order
+    if (token && currentTask) {
+      const loadNotifications = async () => {
+        try {
+          const { apiService } = await import('@/lib/api');
+          const response = await apiService.getSmartNotifications(currentTask.orderId, token);
+          if (response.success && response.notifications) {
+            response.notifications.forEach((notif: any) => {
+              addNotification({
+                id: notif.id,
+                type: notif.type,
+                priority: notif.priority,
+                message: notif.message,
+                action: notif.action,
+                timestamp: new Date(notif.timestamp),
+                orderId: notif.orderId,
+              });
+            });
+          }
+        } catch (error) {
+          console.error('Failed to load smart notifications:', error);
+        }
+      };
+      loadNotifications();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, currentTask]);
@@ -107,17 +167,29 @@ export default function ActiveDeliveryPage() {
       const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
       window.open(mapsUrl, '_blank');
       
-      // Mock estimated time (in real app, would use distance calculation)
+      // Mock estimated time and navigation data (in real app, would use distance calculation)
       if (type === 'pickup') {
         setEstimatedTime(prev => ({ ...prev, pickup: '~5 min' }));
+        setRemainingTime('5 min');
+        setRemainingDistance('2.3 km');
+        setNextTurn('Turn right onto Main Street');
       } else {
         setEstimatedTime(prev => ({ ...prev, delivery: '~12 min' }));
+        setRemainingTime('12 min');
+        setRemainingDistance('5.8 km');
+        setNextTurn('Continue straight on Highway 101');
       }
+      setMapMode(true); // Enable map mode when navigating
     } catch (error) {
       toast.error('Failed to open navigation. Please check your device settings.', {
         icon: '❌',
       });
     }
+  };
+
+  const handleLocationUpdate = (location: { lat: number; lng: number }) => {
+    setCurrentLocation(location);
+    // In production, calculate distance and update remaining time/distance
   };
 
   const handlePhoneCall = (phoneNumber?: string) => {
@@ -148,6 +220,73 @@ export default function ActiveDeliveryPage() {
   const currentStageIndex = stages.findIndex(s => s.id === currentTask.status.toLowerCase() || 
     (s.id === 'ready' && currentTask.status.toLowerCase() === 'ready'));
 
+  // Handle voice commands
+  const handleVoiceCommand = (command: string, text: string) => {
+    if (!currentTask) return;
+
+    switch (command) {
+      case 'accept_order':
+        // Already accepted if we're on this page
+        toast.info('Order already accepted', { icon: '✓' });
+        break;
+      case 'report_issue':
+        toast.info('Issue reported: ' + text, { icon: '📝' });
+        // TODO: Implement issue reporting API call
+        break;
+      case 'confirm_delivery':
+        if (currentTask.status.toLowerCase() === 'picked_up') {
+          handleUpdateStatus('delivered');
+        }
+        break;
+      case 'navigate_to':
+        if (missionState === 'navigate') {
+          handleNavigate(currentTask.pickupAddress, 'pickup');
+        } else if (missionState === 'delivery') {
+          handleNavigate(currentTask.deliveryAddress, 'delivery');
+        }
+        break;
+    }
+  };
+
+  // If mission mode is enabled, show Mission View
+  if (missionMode && missionState && currentTask) {
+    return (
+      <>
+        <MissionView
+          task={currentTask}
+          missionState={missionState}
+          onNavigate={() => {
+            if (missionState === 'navigate') {
+              handleNavigate(currentTask.pickupAddress, 'pickup');
+            } else if (missionState === 'delivery') {
+              handleNavigate(currentTask.deliveryAddress, 'delivery');
+            }
+          }}
+          onCall={() => handlePhoneCall()}
+          onComplete={() => {
+            if (missionState === 'pickup') {
+              handleUpdateStatus('picked_up');
+            } else if (missionState === 'delivery') {
+              if (deliveryPhoto && deliverySignature) {
+                handleUpdateStatus('delivered');
+              } else {
+                toast.error('Please capture photo and signature first');
+                setMissionMode(false);
+              }
+            }
+          }}
+          estimatedTime={
+            missionState === 'navigate' ? estimatedTime.pickup :
+            missionState === 'delivery' ? estimatedTime.delivery :
+            undefined
+          }
+          className="mission-view-container"
+        />
+        <VoiceAssistant onCommand={handleVoiceCommand} />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-neutral-background pb-8">
       {/* Completion Animation Overlay */}
@@ -177,7 +316,14 @@ export default function ActiveDeliveryPage() {
           <h1 className="text-xl font-bold flex-1 text-center">
             Active Delivery
           </h1>
-          <div className="w-10"></div>
+          <button
+            onClick={() => setMissionMode(!missionMode)}
+            className="p-2 hover:bg-white/10 rounded-full active:scale-95 transition-transform touch-target"
+            aria-label={missionMode ? 'Exit mission mode' : 'Enter mission mode'}
+            title={missionMode ? 'Exit mission mode' : 'Enter mission mode'}
+          >
+            {missionMode ? <Minimize2 size={24} /> : <Maximize2 size={24} />}
+          </button>
         </div>
         
         {/* Progress Indicator */}
@@ -220,6 +366,18 @@ export default function ActiveDeliveryPage() {
       </div>
 
       <div className="p-4 space-y-4">
+        {/* Smart Notifications */}
+        {smartNotifications
+          .filter(n => n.orderId === currentTask.orderId || !n.orderId)
+          .slice(0, 3)
+          .map((notification) => (
+            <SmartNotification
+              key={notification.id}
+              notification={notification}
+              onDismiss={removeNotification}
+            />
+          ))}
+
         {/* Enhanced Order Info */}
         <div className="bg-gradient-to-br from-neutral-surface to-primary-light/10 rounded-xl p-6 shadow-xl border-2 border-primary/20 animate-fade-in-up">
           <div className="flex items-center justify-between mb-4">
@@ -541,6 +699,49 @@ export default function ActiveDeliveryPage() {
           )}
         </div>
       </div>
+
+      {/* Map Mode View */}
+      {mapMode && currentTask && (
+        <div className="fixed inset-0 z-50 bg-black">
+          <GlanceableMap
+            pickupLocation={parseAddressToCoordinates(currentTask.pickupAddress)}
+            deliveryLocation={parseAddressToCoordinates(currentTask.deliveryAddress)}
+            currentLocation={currentLocation || undefined}
+            onLocationUpdate={handleLocationUpdate}
+            className="w-full h-full"
+          />
+          <NavigationOverlay
+            nextTurn={nextTurn}
+            remainingTime={remainingTime}
+            remainingDistance={remainingDistance}
+            onCallCustomer={() => handlePhoneCall()}
+            onCallRestaurant={() => handlePhoneCall('+1234567890')}
+            onNavigate={() => {
+              if (missionState === 'navigate') {
+                handleNavigate(currentTask.pickupAddress, 'pickup');
+              } else if (missionState === 'delivery') {
+                handleNavigate(currentTask.deliveryAddress, 'delivery');
+              }
+            }}
+            destination={
+              missionState === 'navigate' ? currentTask.restaurantName :
+              missionState === 'delivery' ? currentTask.customerName :
+              undefined
+            }
+          />
+          <button
+            onClick={() => setMapMode(false)}
+            className="absolute top-4 left-4 z-60 bg-black/80 backdrop-blur-sm text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 hover:bg-black/90 transition-colors touch-target"
+            aria-label="Exit map mode"
+          >
+            <ArrowLeft size={20} />
+            <span>Exit Map</span>
+          </button>
+        </div>
+      )}
+
+      {/* Voice Assistant */}
+      <VoiceAssistant onCommand={handleVoiceCommand} />
     </div>
   );
 }

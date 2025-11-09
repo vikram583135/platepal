@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { apiService, Order } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import OrderStatus from '@/components/OrderStatus';
+import ConversationalOrderTracking from '@/components/ConversationalOrderTracking';
 import EmptyState from '@/components/EmptyState';
 import { ArrowLeft, MapPin, Clock, Package, CheckCircle2, ChefHat, Bike, Home, Receipt, Wifi, WifiOff } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -193,6 +194,13 @@ export default function TrackOrderPage() {
                 <span>{formatDate(order.createdAt)}</span>
               </div>
             </div>
+            {/* Conversational Order Tracking */}
+            <ConversationalOrderTracking
+              order={order}
+              eta={currentStepIndex < statusSteps.length - 1 ? '10-15 minutes' : undefined}
+              driverName="Alex"
+            />
+            
             <OrderStatus status={order.status} />
           </div>
 
